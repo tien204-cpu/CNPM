@@ -1,0 +1,21 @@
+name: Smoke tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Run smoke script (requires Docker)
+        run: |
+          docker-compose build --pull
+          docker-compose up -d
+          npm run smoke

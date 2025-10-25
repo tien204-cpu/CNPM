@@ -1,0 +1,73 @@
+services:
+  db:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: foodfast
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+
+
+  user:
+    build: ./services/user
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/foodfast
+      PORT: 3001
+      JWT_SECRET: supersecret
+    ports:
+      - "3001:3001"
+    depends_on:
+      - db
+
+  product:
+    build: ./services/product
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/foodfast
+      PORT: 3002
+    ports:
+      - "3002:3002"
+    depends_on:
+      - db
+
+  order:
+    build: ./services/order
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/foodfast
+      PORT: 3003
+      PRODUCT_URL: http://product:3002
+      PAYMENT_URL: http://payment:3004
+    ports:
+      - "3003:3003"
+    depends_on:
+      - db
+      - product
+      - payment
+
+  payment:
+    build: ./services/payment
+    environment:
+      PORT: 3004
+    ports:
+      - "3004:3004"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    environment:
+      VITE_API_BASE: http://localhost:3003
+    depends_on:
+      - product
+      - user
+      - order
+
+volumes:
+  db-data:

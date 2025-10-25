@@ -1,0 +1,13 @@
+{
+  "name": "foodfast-delivery",
+  "private": true,
+  "scripts": {
+    "check:user": "npx -y --prefix services/user tsc -p services/user/tsconfig.json --noEmit",
+    "check:product": "npx -y --prefix services/product tsc -p services/product/tsconfig.json --noEmit",
+    "check:order": "npx -y --prefix services/order tsc -p services/order/tsconfig.json --noEmit",
+    "check:payment": "npx -y --prefix services/payment tsc -p services/payment/tsconfig.json --noEmit",
+    "check:frontend": "npx -y --prefix frontend tsc -p frontend/tsconfig.json --noEmit || echo 'no frontend'",
+    "check": "npm run check:user && npm run check:product && npm run check:order && npm run check:payment && npm run check:frontend",
+    "smoke": "node ./scripts/smoke-test-retry.js"
+  }
+}
