@@ -63,7 +63,9 @@ services:
     ports:
       - "5173:80"
     environment:
-      VITE_API_BASE: http://localhost:3003
+      VITE_PRODUCT_BASE: http://localhost:3002
+      VITE_USER_BASE: http://localhost:3001
+      VITE_ORDER_BASE: http://localhost:3003
     depends_on:
       - product
       - user

@@ -8,7 +8,11 @@
     "check:payment": "npx -y --prefix services/payment tsc -p services/payment/tsconfig.json --noEmit",
     "check:frontend": "npx -y --prefix frontend tsc -p frontend/tsconfig.json --noEmit || echo 'no frontend'",
     "check": "npm run check:user && npm run check:product && npm run check:order && npm run check:payment && npm run check:frontend",
-    "smoke": "node ./scripts/smoke-test-retry.js"
+    "smoke": "node ./scripts/smoke-test-retry.js",
+    "db:push-all": "npx --prefix services/user prisma db push --accept-data-loss && npx --prefix services/product prisma db push --accept-data-loss && npx --prefix services/order prisma db push --accept-data-loss",
+    "docker:up": "docker compose up --build --remove-orphans -d",
+    "test:e2e": "npm --prefix frontend run test:e2e",
+    "test:all": "npm run smoke && npm run test:e2e"
   },
   "dependencies": {
     "axios": "^1.13.1"

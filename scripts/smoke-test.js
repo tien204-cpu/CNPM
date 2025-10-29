@@ -17,13 +17,16 @@ async function run() {
     const products = (await axios.get(`${API.product}/products`)).data;
     console.log('  -> Found', products.length);
 
-    console.log('3) Register user...');
-    const reg = (await axios.post(`${API.user}/register`, { email: 'test@example.com', password: 'password', name: 'Tester' })).data;
-    console.log('  -> Registered', reg.id);
+  console.log('3) Register user...');
+  // use a unique email per run to keep smoke idempotent
+  const smokeEmail = `smoke+${Date.now()}@example.com`;
+  const password = 'password';
+  const reg = (await axios.post(`${API.user}/register`, { email: smokeEmail, password, name: 'Smoke Tester' })).data;
+  console.log('  -> Registered', reg.id);
 
-    console.log('4) Login...');
-    const login = (await axios.post(`${API.user}/login`, { email: 'test@example.com', password: 'password' })).data;
-    console.log('  -> Token length', login.token.length);
+  console.log('4) Login...');
+  const login = (await axios.post(`${API.user}/login`, { email: smokeEmail, password })).data;
+  console.log('  -> Token length', login.token.length);
 
     console.log('5) Place order...');
     const first = products[0];

@@ -1,17 +1,17 @@
 # FoodFast Delivery - Monorepo
 
-This repository contains a small microservices demo (User, Product, Order, Payment) plus a React frontend and a Docker Compose orchestration. It is intended as a learning/demo project and includes a smoke-test harness.
+Repo này chứa demo microservices (user, product, order, payment) + frontend React và Docker Compose để chạy toàn bộ stack.
 
 Quick commands
 
 Run per-service TypeScript checks and the smoke-test from the repo root:
 
-```powershell
-# run all TypeScript checks (invokes tsc in each service)
-npm run check
+Các lệnh thường dùng (từ thư mục gốc)
 
-# run the smoke test (must have docker-compose up running services in dev) or the script will wait for services
-npm run smoke
+- Build & chạy stack (detached):
+
+```powershell
+npm run docker:up
 ```
 
 PowerShell notes
@@ -24,7 +24,15 @@ npm.cmd run check
 node .\services\user\node_modules\typescript\lib\tsc.js -p services/user/tsconfig.json --noEmit
 ```
 
-CI
+Ghi chú nhanh
+
+- Smoke test hiện đã dùng email ngẫu nhiên để tránh lỗi `email exists` khi chạy lặp.
+- Nếu cần reset database hoàn toàn: dừng compose và xoá volume `db-data` (chú ý mất dữ liệu):
+
+```powershell
+docker compose down -v
+npm run docker:up
+```
 
 - A GitHub Actions workflow is provided at `.github/workflows/ci.yml` which runs the TypeScript checks and the smoke-test using Docker Compose on runners that support Docker.
 
@@ -32,4 +40,12 @@ Notes
 
 - Prisma clients are generated for services that use Prisma; if you modify Prisma schemas, run `npx prisma generate` in the corresponding service.
 - If you see native module build errors (e.g. bcrypt) when running `npm install`, you can install with `--ignore-scripts` locally for typechecking, or ensure your environment has the required build tools.
+
+- Nếu bạn thay đổi Prisma schema, chạy `npm run db:push-all` để áp schema lên DB (containers đang chạy), hoặc chạy `npx prisma generate` trong service tương ứng.
+
+Tiếp theo tôi có thể:
+- A: Fix các edge-case còn lại của smoke/e2e, hoàn thiện UI nếu cần.
+- B: Viết CI (GitHub Actions) để tự động chạy build + tests.
+
+Hướng dẫn này ngắn gọn — nếu muốn tôi cập nhật README chi tiết hơn (runbook, troubleshooting), nói tôi biết.
 

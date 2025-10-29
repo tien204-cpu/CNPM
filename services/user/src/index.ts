@@ -6,6 +6,15 @@ import { PrismaClient } from '@prisma/client';
 const app = express();
 app.use(express.json());
 
+// allow CORS for browser-based frontend
+app.use((req: any, res: any, next: any) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 

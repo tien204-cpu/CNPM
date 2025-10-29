@@ -6,6 +6,15 @@ import path from 'path';
 const app = express();
 app.use(express.json());
 
+// very small CORS middleware for browser-based frontend
+app.use((req: any, res: any, next: any) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 // request logging middleware: log every incoming request body/headers/path
 app.use((req: Request, res: Response, next: NextFunction) => {
   try {

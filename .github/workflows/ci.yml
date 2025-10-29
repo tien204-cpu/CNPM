@@ -2,6 +2,68 @@ name: CI
 
 on:
   push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    services: {}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU and buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and start Docker Compose
+        run: |
+          docker compose up --build -d
+
+      - name: Wait for DB
+        run: |
+          # wait for postgres to be ready
+          for i in {1..30}; do
+            docker compose exec -T db pg_isready -U postgres && break || sleep 2
+          done
+
+      - name: Apply Prisma schema (user/product/order)
+        run: |
+          docker compose exec -T user npx prisma db push --accept-data-loss
+          docker compose exec -T product npx prisma db push --accept-data-loss
+          docker compose exec -T order npx prisma db push --accept-data-loss
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: Run smoke tests
+        run: node ./scripts/smoke-test.js
+
+      - name: Install Playwright browsers
+        run: npx --yes --prefix frontend playwright install --with-deps
+
+      - name: Run Playwright e2e (with traces)
+        run: |
+          APP_URL=http://localhost:5173 npx --prefix frontend playwright test --config=frontend/playwright.config.js --reporter=list --trace on
+
+      - name: Upload Playwright artifacts (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            test-results
+            frontend/test-results
+            playwright-report
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+name: CI
+
+on:
+  push:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]

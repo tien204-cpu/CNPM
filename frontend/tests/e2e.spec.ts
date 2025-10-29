@@ -2,46 +2,32 @@ import { test, expect } from '@playwright/test';
 // Allow overriding APP_URL from environment (CI/local). If not provided, use fallback ports.
 const APP_URL = process.env.APP_URL || '';
 
-// Define mock data for /products and /orders API responses
-const mockProducts = [{ id: 'p1', name: 'Mock Pizza', price: 9.99 }];
-const mockOrders = [{ id: 'mock-order-1' }];
+test('full user flow: register, add to cart and place order', async ({ page }) => {
+  const base = await gotoWithFallback(page, APP_URL);
 
-test('add to cart and place order', async ({ page }) => {
-  // Set up mock API responses for /products and /orders
-  await page.route('**/products', route => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(mockProducts),
-    });
-  });
-
-  await page.route('**/orders', async route => {
-    // capture request body if needed, but respond with a mock order id
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(mockOrders[0]),
-    });
-  });
-
-  // Navigate to the app using APP_URL or try common Vite ports (5173/5174/5175)
-  await gotoWithFallback(page, APP_URL);
-
-  // Wait for products to render
-  await page.waitForSelector('.product-card');
+  // Wait for products API to respond and for products to render
+  await page.waitForResponse(r => r.url().includes('/products') && r.status() === 200, { timeout: 60000 });
+  await page.waitForSelector('.product-card', { timeout: 10000 });
   const firstCard = page.locator('.product-card').first();
   await firstCard.locator('button:has-text("Add")').click();
 
-  // Open cart and place order
+  // fill register form in cart area
+  await page.fill('input[placeholder="email"]', `e2e+${Date.now()}@example.com`);
+  await page.fill('input[placeholder="password"]', 'password');
+  // ensure register mode selected
+  await page.selectOption('select', 'register');
+  await page.click('button:has-text("Register")');
+
+  // small wait for login to complete
+  await page.waitForTimeout(500);
+
+  // Place order
   await page.click('button:has-text("Place order")');
 
-  // Wait for mocked /orders response
-  const [req] = await Promise.all([
-    page.waitForResponse(r => r.url().includes('/orders') && r.status() === 200),
-  ]);
-  const json = await req.json();
-  expect(json.id).toBeTruthy();
+  // Wait for orders endpoint response
+  const resp = await page.waitForResponse(r => r.url().includes('/orders') && r.status() === 200);
+  const json = await resp.json();
+  expect(json.id || json.orderId).toBeTruthy();
 });
 
 // Define gotoWithFallback function to navigate to the app using APP_URL or try common Vite ports

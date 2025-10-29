@@ -2,17 +2,23 @@ import React, { useEffect, useState } from 'react'
 import axios from 'axios'
 import './App.css'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3003'
+const PRODUCT_BASE = import.meta.env.VITE_PRODUCT_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3002'
+const USER_BASE = import.meta.env.VITE_USER_BASE || 'http://localhost:3001'
+const ORDER_BASE = import.meta.env.VITE_ORDER_BASE || 'http://localhost:3003'
 
 export default function App() {
   const [products, setProducts] = useState<Array<{ id: string; name: string; price: number; stock?: number; imageUrl?: string }>>([])
   const [cart, setCart] = useState<Array<{ productId: string; qty: number }>>([])
   const [loading, setLoading] = useState<boolean>(true)
+  const [user, setUser] = useState<{ id: string; email: string; token?: string } | null>(null)
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  const [authEmail, setAuthEmail] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
 
   useEffect(() => {
     async function load() {
       try {
-        const p = await axios.get(`${API_BASE.replace(/\/$/, '')}/products`)
+  const p = await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products`)
         setProducts(p.data)
       } catch (e) {
         console.error(e)
@@ -20,6 +26,14 @@ export default function App() {
       setLoading(false)
     }
     load()
+  }, [])
+
+  useEffect(() => {
+    // load user from localStorage if exists
+    try {
+      const raw = localStorage.getItem('ff_user')
+      if (raw) setUser(JSON.parse(raw))
+    } catch (e) {}
   }, [])
 
   function getImageUrl(p: { id: string; name: string }) {
@@ -51,12 +65,46 @@ export default function App() {
 
   async function place() {
     try {
-      const res = await axios.post(`${API_BASE}/orders`, { items: cart })
+  const headers: any = {}
+  if (user?.token) headers.Authorization = `Bearer ${user.token}`
+  const res = await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/orders`, { items: cart }, { headers })
       alert('Order placed: ' + JSON.stringify(res.data))
       setCart([])
     } catch (e: any) {
       alert('Order failed: ' + (e.response?.data?.error || e.message))
     }
+  }
+
+  async function submitAuth() {
+    try {
+      if (authMode === 'register') {
+        const r = await axios.post(`${USER_BASE.replace(/\/$/, '')}/register`, { email: authEmail, password: authPassword, name: authEmail.split('@')[0] })
+        // register returns id
+        // then login automatically
+      }
+      const login = await axios.post(`${USER_BASE.replace(/\/$/, '')}/login`, { email: authEmail, password: authPassword })
+      const token = login.data.token
+      // try /me
+      let me = null
+      try {
+        const meResp = await axios.get(`${USER_BASE.replace(/\/$/, '')}/me`, { headers: { Authorization: `Bearer ${token}` } })
+        me = meResp.data
+      } catch (e) {
+        // ignore
+      }
+      const u = { id: me?.id || '', email: authEmail, token }
+      setUser(u)
+      localStorage.setItem('ff_user', JSON.stringify(u))
+      setAuthEmail('')
+      setAuthPassword('')
+    } catch (e: any) {
+      alert('Auth failed: ' + (e.response?.data?.error || e.message))
+    }
+  }
+
+  function logout() {
+    setUser(null)
+    try { localStorage.removeItem('ff_user') } catch (e) {}
   }
 
   return (
@@ -87,7 +135,41 @@ export default function App() {
         </div>
 
         <div style={{ flex: 1, borderLeft: '1px solid #eee', paddingLeft: 18 }}>
-          <h2>Cart</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2>Cart</h2>
+            <div>
+              {user ? (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ fontSize: 12, color: '#444' }}>{user.email}</div>
+                  <button className="btn" onClick={logout}>Logout</button>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: '#444' }}>{/* placeholder */}</div>
+              )}
+            </div>
+          </div>
+          <div style={{ marginTop: 8, marginBottom: 12 }}>
+            {!user && (
+              <div style={{ border: '1px solid var(--border)', padding: 10, borderRadius: 6, marginBottom: 8 }}>
+                <div style={{ marginBottom: 6 }}>
+                  <label style={{ display: 'block', fontSize: 12 }}>Mode</label>
+                  <select value={authMode} onChange={e => setAuthMode(e.target.value as any)}>
+                    <option value="login">Login</option>
+                    <option value="register">Register</option>
+                  </select>
+                </div>
+                <div style={{ marginBottom: 6 }}>
+                  <input placeholder="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
+                </div>
+                <div style={{ marginBottom: 6 }}>
+                  <input placeholder="password" type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} />
+                </div>
+                <div>
+                  <button className="btn" onClick={submitAuth}>{authMode === 'login' ? 'Login' : 'Register'}</button>
+                </div>
+              </div>
+            )}
+          </div>
           {cart.length === 0 ? <div>Cart is empty</div> : (
             <ul style={{ listStyle: 'none', padding: 0 }}>
               {cart.map(it => {

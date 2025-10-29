@@ -16,6 +16,15 @@ function appendLog(entry: any) {
 const app = express();
 app.use(express.json());
 
+// allow CORS for browser-based frontend
+app.use((req: any, res: any, next: any) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 // log all incoming requests to /tmp/order-debug.log for easier tracing
 app.use((req: Request, res: Response, next: NextFunction) => {
   try {
