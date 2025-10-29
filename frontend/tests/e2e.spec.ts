@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-const APP_URL = 'http://localhost:3000'; // giá trị mặc định cho APP_URL
+// Allow overriding APP_URL from environment (CI/local). If not provided, use fallback ports.
+const APP_URL = process.env.APP_URL || '';
 
 // Define mock data for /products and /orders API responses
 const mockProducts = [{ id: 'p1', name: 'Mock Pizza', price: 9.99 }];
