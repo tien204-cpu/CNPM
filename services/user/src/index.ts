@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
@@ -11,7 +11,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 
 const prisma = new PrismaClient();
 
-app.post('/register', async (req, res) => {
+app.post('/register', async (req: Request, res: Response) => {
   const { email, password, name } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
   try {
@@ -25,7 +25,7 @@ app.post('/register', async (req, res) => {
   }
 });
 
-app.post('/login', async (req, res) => {
+app.post('/login', async (req: Request, res: Response) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
   try {
@@ -40,7 +40,7 @@ app.post('/login', async (req, res) => {
   }
 });
 
-app.get('/me', async (req, res) => {
+app.get('/me', async (req: Request, res: Response) => {
   const auth = req.headers.authorization;
   if (!auth) return res.status(401).json({ error: 'no token' });
   const token = auth.split(' ')[1];

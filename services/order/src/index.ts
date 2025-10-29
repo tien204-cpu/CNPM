@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
 import fs from 'fs';
@@ -17,7 +17,7 @@ const app = express();
 app.use(express.json());
 
 // log all incoming requests to /tmp/order-debug.log for easier tracing
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   try {
     appendLog({ type: 'request', method: req.method, path: req.path, headers: req.headers, body: req.body });
   } catch (e) {

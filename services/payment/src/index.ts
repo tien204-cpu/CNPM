@@ -1,11 +1,11 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 
 const app = express();
 app.use(express.json());
 
 // log all incoming requests into debug log
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   try {
     appendLog({ type: 'request', method: req.method, path: req.path, headers: req.headers, body: req.body });
   } catch (e) {
@@ -26,7 +26,7 @@ function appendLog(entry: any) {
   }
 }
 
-app.post('/pay', (req, res) => {
+app.post('/pay', (req: Request, res: Response) => {
   const { amount } = req.body;
   appendLog({ route: '/pay', req: { amount } });
   if (typeof amount !== 'number') {
@@ -48,7 +48,7 @@ app.post('/pay', (req, res) => {
 });
 
 // debug endpoint
-app.get('/debug/logs', (req, res) => {
+app.get('/debug/logs', (req: Request, res: Response) => {
   try {
     const tail = Number(req.query.tail) || 20000;
     const raw = fs.existsSync(LOG_PATH) ? fs.readFileSync(LOG_PATH, 'utf8') : '';

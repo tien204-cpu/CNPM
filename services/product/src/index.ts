@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
@@ -7,7 +7,7 @@ const app = express();
 app.use(express.json());
 
 // request logging middleware: log every incoming request body/headers/path
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   try {
     appendLog({ type: 'request', method: req.method, path: req.path, headers: req.headers, body: req.body });
   } catch (e) {
@@ -29,7 +29,7 @@ function appendLog(entry: any) {
   }
 }
 
-app.post('/seed', async (req, res) => {
+app.post('/seed', async (req: Request, res: Response) => {
   const sample = [
     { name: 'Cheeseburger', price: 5.99, stock: 50, imageUrl: 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=800&q=60' },
     { name: 'Fries', price: 2.99, stock: 100, imageUrl: 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&w=800&q=60' },
