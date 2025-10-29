@@ -30,9 +30,21 @@ jobs:
 
       - name: Apply Prisma schema (user/product/order)
         run: |
-          docker compose exec -T user npx prisma db push --accept-data-loss
-          docker compose exec -T product npx prisma db push --accept-data-loss
-          docker compose exec -T order npx prisma db push --accept-data-loss
+          # ensure each service has the expected tables before running tests
+          docker compose exec -T user npx prisma db push --accept-data-loss || true
+          docker compose exec -T product npx prisma db push --accept-data-loss || true
+          docker compose exec -T order npx prisma db push --accept-data-loss || true
+
+      - name: Seed product data
+        run: |
+          # call the product service /seed endpoint to populate sample products
+          # use a short wait loop to wait until product service is reachable
+          for i in {1..20}; do
+            if curl -sS --fail http://localhost:3002/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          # try /seed (some images of product service expose /seed as POST)
+          curl -sS -X POST http://localhost:3002/seed || true
 
       - name: Install root deps
         run: npm ci

@@ -42,10 +42,22 @@ Notes
 - If you see native module build errors (e.g. bcrypt) when running `npm install`, you can install with `--ignore-scripts` locally for typechecking, or ensure your environment has the required build tools.
 
 - Nếu bạn thay đổi Prisma schema, chạy `npm run db:push-all` để áp schema lên DB (containers đang chạy), hoặc chạy `npx prisma generate` trong service tương ứng.
+If your Prisma schemas change, keep DB and clients in sync. Quick commands are below (PowerShell):
 
-Tiếp theo tôi có thể:
-- A: Fix các edge-case còn lại của smoke/e2e, hoàn thiện UI nếu cần.
-- B: Viết CI (GitHub Actions) để tự động chạy build + tests.
+```powershell
+# apply combined schema to running services (best-effort)
+docker compose exec -T user npx prisma db push --accept-data-loss
+docker compose exec -T product npx prisma db push --accept-data-loss
+docker compose exec -T order npx prisma db push --accept-data-loss
 
-Hướng dẫn này ngắn gọn — nếu muốn tôi cập nhật README chi tiết hơn (runbook, troubleshooting), nói tôi biết.
+# seed product data (product service provides /seed endpoint)
+Invoke-RestMethod -Method Post http://localhost:3002/seed
+```
+
+Notes and troubleshooting
+- If Playwright or the frontend can't find products, run the seed command above.
+- If you see Prisma errors complaining about missing columns/tables, run the `db push` commands above for each service and then restart that service (docker compose restart <service>). This repo's CI will also attempt to run the same steps before tests.
+
+Want me to do more?
+- I can add a helper script (`npm run db:push-all`) and wire CI to ensure schema + seed run before tests. Tell me and I'll add it.
 
