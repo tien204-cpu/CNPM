@@ -1,1 +1,0 @@
-ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS status text DEFAULT 'paid';
