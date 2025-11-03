@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 
@@ -30,7 +30,8 @@ app.post('/register', async (req: Request, res: Response) => {
     const user = await prisma.user.create({ data: { email, password: hash, name } });
     res.json({ id: user.id, email: user.email, name: user.name });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    console.error('Register error:', e);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -39,13 +40,15 @@ app.post('/login', async (req: Request, res: Response) => {
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
   try {
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return res.status(401).json({ error: 'invalid' });
+    if (!user) return res.status(401).json({ error: 'sai email hoặc mật khẩu' });
     const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return res.status(401).json({ error: 'invalid' });
+    if (!ok) return res.status(401).json({ error: 'sai email hoặc mật khẩu' });
     const token = jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    console.error('Login error:', e);
+    // hide internal errors (like missing DB table) from clients
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

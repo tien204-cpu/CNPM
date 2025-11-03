@@ -28,6 +28,18 @@ test('full user flow: register, add to cart and place order', async ({ page }) =
   console.log('PAGE HTML END');
   await page.waitForSelector('.product-card', { timeout: 30000 });
   const firstCard = page.locator('.product-card').first();
+  // ensure the product card has an image and name
+  const productName = await firstCard.locator('.product-name').innerText();
+  const img = firstCard.locator('img');
+  await expect(img).toHaveAttribute('alt', productName);
+  const imgSrc = await img.getAttribute('src');
+  expect(imgSrc).toBeTruthy();
+  // try waiting for the image network response (best-effort)
+  try {
+    await page.waitForResponse(r => r.url() === imgSrc && r.status() === 200, { timeout: 5000 });
+  } catch (e) {
+    console.log('Image response not captured or timed out for', imgSrc);
+  }
   await firstCard.locator('button:has-text("Add")').click();
 
   // fill register form in cart area
