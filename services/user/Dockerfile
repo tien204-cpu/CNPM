@@ -20,4 +20,4 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Schema changes should be applied manually (or via CI) with a controlled command
 # such as `npx prisma db push --accept-data-loss` (only after explicit approval)
 # or `npm run prisma:migrate` when using migrations.
-CMD ["sh", "-lc", "until nc -z db 5432; do echo 'waiting for db'; sleep 1; done; npm run prisma:generate && npm run start"]
+CMD ["sh", "-lc", "until nc -z db 5432; do echo 'waiting for db'; sleep 1; done; npm run prisma:generate && npx prisma db push --accept-data-loss && npm run start"]

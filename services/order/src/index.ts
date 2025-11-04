@@ -68,7 +68,7 @@ async function axiosWithRetry(method: 'get'|'post', url: string, data?: any, con
 }
 
 app.post('/orders', async (req: any, res: any) => {
-  const { items } = req.body as { items: { productId: string; qty: number }[] };
+  const { items, shipping, payment, userEmail } = req.body as { items: { productId: string; qty: number }[]; shipping?: any; payment?: any; userEmail?: string };
   if (!items || !Array.isArray(items)) return res.status(400).json({ error: 'items required' });
 
   try {
@@ -122,12 +122,17 @@ app.post('/orders', async (req: any, res: any) => {
           return res.status(402).json({ error: 'payment failed' });
         }
 
-      // Create order in our DB
+      // Create order in our DB with shipping/payment/userEmail
       let order;
-      // Create order without writing `status` field to avoid schema mismatch across environments
+      const paymentMethod = (payment && payment.method) || 'COD';
       order = await prisma.order.create({
         data: {
           total,
+          userEmail: userEmail || null,
+          shippingName: shipping?.name || null,
+          shippingPhone: shipping?.phone || null,
+          shippingAddress: shipping?.address || null,
+          paymentMethod,
           items: { create: items.map(i => ({ productId: i.productId, qty: i.qty })) }
         },
         include: { items: true }
@@ -156,8 +161,19 @@ app.post('/orders', async (req: any, res: any) => {
 });
 
 app.get('/orders', async (req: any, res: any) => {
-  const all = await prisma.order.findMany({ include: { items: true } });
+  const email = (req.query?.email as string) || '';
+  const all = await prisma.order.findMany({
+    where: email ? { userEmail: email } : undefined,
+    include: { items: true }
+  });
   res.json(all);
+});
+
+app.get('/orders/:id', async (req: any, res: any) => {
+  const id = req.params.id;
+  const o = await prisma.order.findUnique({ where: { id }, include: { items: true } });
+  if (!o) return res.status(404).json({ error: 'not found' });
+  res.json(o);
 });
 
 app.listen(PORT, () => console.log(`Order service running on ${PORT}`));

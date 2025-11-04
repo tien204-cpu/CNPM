@@ -19,7 +19,7 @@ services:
   user:
     build: ./services/user
     environment:
-      DATABASE_URL: postgres://postgres:postgres@db:5432/foodfast
+      DATABASE_URL: postgres://postgres:postgres@db:5432/foodfast?schema=user
       PORT: 3001
       JWT_SECRET: supersecret
     ports:
@@ -30,7 +30,7 @@ services:
   product:
     build: ./services/product
     environment:
-      DATABASE_URL: postgres://postgres:postgres@db:5432/foodfast
+      DATABASE_URL: postgres://postgres:postgres@db:5432/foodfast?schema=product
       PORT: 3002
     ports:
       - "3002:3002"
@@ -40,7 +40,7 @@ services:
   order:
     build: ./services/order
     environment:
-      DATABASE_URL: postgres://postgres:postgres@db:5432/foodfast
+      DATABASE_URL: postgres://postgres:postgres@db:5432/foodfast?schema=order
       PORT: 3003
       PRODUCT_URL: http://product:3002
       PAYMENT_URL: http://payment:3004

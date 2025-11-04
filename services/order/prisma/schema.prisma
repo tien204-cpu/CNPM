@@ -12,6 +12,11 @@ model Order {
   total      Float
   status     String @default("paid")
   createdAt  DateTime @default(now())
+  userEmail  String?
+  shippingName String?
+  shippingPhone String?
+  shippingAddress String?
+  paymentMethod String?
   items      OrderItem[]
 }
 

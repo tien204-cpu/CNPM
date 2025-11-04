@@ -49,7 +49,7 @@ app.post('/seed', async (req: Request, res: Response) => {
     // Pizza & Italian
     { name: 'Margherita Pizza', price: 8.99, stock: 60, imageUrl: 'https://images.unsplash.com/photo-1548365328-9f547fb0953c?auto=format&fit=crop&w=900&q=60', description: 'Pizza truyền thống Ý với sốt cà chua, mozzarella tươi và lá húng quế.' },
     { name: 'Pepperoni Pizza', price: 9.99, stock: 60, imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=900&q=60', description: 'Pizza pepperoni cay nhẹ, phủ phô mai kéo sợi hấp dẫn.' },
-    { name: 'Hawaiian Pizza', price: 9.49, stock: 55, imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=900&q=60', description: 'Vị ngọt của dứa kết hợp thịt nguội và phô mai béo ngậy.' },
+    { name: 'Hawaiian Pizza', price: 9.49, stock: 55, imageUrl: 'https://images.unsplash.com/photo-1548365327-8f1f2b33d8b1?auto=format&fit=crop&w=900&q=60', description: 'Vị ngọt của dứa kết hợp thịt nguội và phô mai béo ngậy.' },
     { name: 'Spaghetti Carbonara', price: 7.99, stock: 50, imageUrl: 'https://images.unsplash.com/photo-1521389508051-d7ffb5dc8bbf?auto=format&fit=crop&w=900&q=60', description: 'Mì Ý sốt trứng và phô mai pecorino, kèm thịt xông khói giòn.' },
     { name: 'Lasagna', price: 8.49, stock: 40, imageUrl: 'https://images.unsplash.com/photo-1623428187969-5da2dcea5c25?auto=format&fit=crop&w=900&q=60', description: 'Lớp mì xếp xen kẽ sốt thịt cà chua, bechamel và phô mai nướng.' },
 
@@ -74,7 +74,7 @@ app.post('/seed', async (req: Request, res: Response) => {
     // Mexican
     { name: 'Taco Bò', price: 3.99, stock: 100, imageUrl: 'https://images.unsplash.com/photo-1601050690597-9d43e6234943?auto=format&fit=crop&w=900&q=60', description: 'Taco vỏ ngô giòn, nhân bò xào gia vị Mexico, rau và phô mai.' },
     { name: 'Chicken Burrito', price: 6.99, stock: 70, imageUrl: 'https://images.unsplash.com/photo-1599974579688-8dbdd7a93f5f?auto=format&fit=crop&w=900&q=60', description: 'Burrito gà nướng, cơm Mexico, đậu đen và sốt pico de gallo.' },
-    { name: 'Quesadilla', price: 5.99, stock: 70, imageUrl: 'https://images.unsplash.com/photo-1617195737494-8c31fe6df024?auto=format&fit=crop&w=900&q=60', description: 'Bánh tortilla kẹp phô mai tan chảy và thịt gà/ bò nướng.' },
+    { name: 'Quesadilla', price: 5.99, stock: 70, imageUrl: 'https://images.unsplash.com/photo-1615873968403-89e72eb38c80?auto=format&fit=crop&w=900&q=60', description: 'Bánh tortilla kẹp phô mai tan chảy và thịt gà/bò nướng.' },
 
     // Chicken / Steak
     { name: 'Gà Rán', price: 6.49, stock: 100, imageUrl: 'https://images.unsplash.com/photo-1604908554049-1f1d2bcb1a8a?auto=format&fit=crop&w=900&q=60', description: 'Gà rán giòn rụm với lớp áo bột đậm vị, ăn kèm sốt cay/ ngọt.' },
@@ -91,7 +91,7 @@ app.post('/seed', async (req: Request, res: Response) => {
     // Drinks & Desserts
     { name: 'Trà Sữa Trân Châu', price: 3.49, stock: 150, imageUrl: 'https://images.unsplash.com/photo-1586201375761-83865001e31b?auto=format&fit=crop&w=900&q=60', description: 'Trà sữa Đài Loan béo thơm, trân châu dẻo dai.' },
     { name: 'Nước Cam Ép', price: 2.99, stock: 120, imageUrl: 'https://images.unsplash.com/photo-1571076172156-7a5b26f61f4a?auto=format&fit=crop&w=900&q=60', description: 'Nước cam nguyên chất vắt lạnh, giàu vitamin C.' },
-    { name: 'Chè Ba Màu', price: 2.49, stock: 100, imageUrl: 'https://images.unsplash.com/photo-1625944525301-8c1f57a19f9c?auto=format&fit=crop&w=900&q=60', description: 'Chè truyền thống Việt Nam với đậu, thạch và nước cốt dừa.' },
+    { name: 'Chè Ba Màu', price: 2.49, stock: 100, imageUrl: 'https://images.unsplash.com/photo-1604908553651-1e9ebcca40fe?auto=format&fit=crop&w=900&q=60', description: 'Chè truyền thống Việt Nam với đậu, thạch và nước cốt dừa.' },
   ];
   try {
     await prisma.product.deleteMany();
