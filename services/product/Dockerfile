@@ -5,6 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 RUN npm install --no-audit --no-fund --silent
 COPY . .
+RUN npm run prisma:generate
 RUN npm run build
 
 FROM node:18-bullseye-slim AS runtime
