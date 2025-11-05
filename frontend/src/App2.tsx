@@ -123,6 +123,24 @@ export default function App() {
     return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
   }
 
+  function slugifyName(name: string) {
+    return (name || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+  }
+
+  function localVariants(name: string, id?: string) {
+    const s = slugifyName(name)
+    const v: string[] = []
+    if (s) v.push(`/images/${s}.webp`, `/images/${s}.jpg`, `/images/${s}.png`, `/images/${s}.jpeg`)
+    if (id) v.push(`/images/${id}.webp`, `/images/${id}.jpg`, `/images/${id}.png`, `/images/${id}.jpeg`)
+    return v
+  }
+
   function categoryOf(name: string) {
     const n = (name || '').toLowerCase()
     if (/pizza/.test(n)) return 'Pizza'
@@ -166,6 +184,14 @@ export default function App() {
     const cat = getImageUrl({ id: prodId, name })
     if (cat) return cat
     return p?.imageUrl || ''
+  }
+
+  function imageCandidates(p: Product) {
+    const locals = localVariants(p.name, p.id)
+    const mapped = getMappedImage({ id: p.id, name: p.name }) || ''
+    const explicit = p.imageUrl || ''
+    const cat = getImageUrl({ id: p.id, name: p.name })
+    return [...locals, mapped, explicit, cat].filter(Boolean)
   }
 
   function pickRecommended(list: Product[], count = 9) {
@@ -327,7 +353,7 @@ export default function App() {
                 <div key={p.id} className="product-card">
                   <div className="product-media" onClick={() => go(`/product/${p.id}`)} style={{ cursor: 'pointer' }}>
                     <div className="badge">{categoryOf(p.name)}</div>
-                    <ImageWithPlaceholder key={p.id} src={imageFor(p)} srcList={[p.imageUrl || '', getImageUrl(p)]} alt={p.name} />
+                    {(() => { const c = imageCandidates(p); return <ImageWithPlaceholder key={p.id} src={c[0]} srcList={c.slice(1)} alt={p.name} /> })()}
                   </div>
                   <div className="product-body">
                     <div className="product-name">{p.name}</div>
@@ -558,7 +584,7 @@ export default function App() {
         <button className="btn ghost" onClick={() => go('/')}>Quay lại</button>
         <h2>{p.name}</h2>
         <div className="product-hero">
-          <ImageWithPlaceholder src={imageFor(p)} srcList={[p.imageUrl || '', getImageUrl(p)]} alt={p.name} />
+          {(() => { const c = imageCandidates(p); return <ImageWithPlaceholder src={c[0]} srcList={c.slice(1)} alt={p.name} /> })()}
         </div>
         <p>Giá: ${p.price.toFixed(2)}</p>
         {p.description && <p>{p.description}</p>}

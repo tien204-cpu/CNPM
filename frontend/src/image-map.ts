@@ -9,55 +9,55 @@ const BY_ID: ImgMap = {
 
 const BY_SLUG: ImgMap = {
   // Pizza & Italian
-  'margherita-pizza': 'https://images.unsplash.com/photo-1548365328-9f547fb0953c?auto=format&fit=crop&w=900&q=60',
-  'pepperoni-pizza': 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=900&q=60',
-  'hawaiian-pizza': 'https://images.unsplash.com/photo-1548365327-8f1f2b33d8b1?auto=format&fit=crop&w=900&q=60',
-  'spaghetti-carbonara': 'https://images.unsplash.com/photo-1521389508051-d7ffb5dc8bbf?auto=format&fit=crop&w=900&q=60',
-  'lasagna': 'https://images.unsplash.com/photo-1623428187969-5da2dcea5c25?auto=format&fit=crop&w=900&q=60',
+  'margherita-pizza': '/images/margherita-pizza.jpg',
+  'pepperoni-pizza': '/images/Pepperoni-Pizza.jpg',
+  'hawaiian-pizza': '/images/Hawaiian-Pizza.jpg',
+  'spaghetti-carbonara': '/images/spaghetti-carbonara.jpg',
+  'lasagna': '/images/Italian-Lasagna.jpg',
 
   // Burger & Fast Food
-  'cheeseburger': 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=900&q=60',
-  'double-burger': 'https://images.unsplash.com/photo-1553979459-d2229ba7433b?auto=format&fit=crop&w=900&q=60',
-  'fries': 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&w=900&q=60',
-  'coke-soda': 'https://images.unsplash.com/photo-1554866585-cd94860890b7?auto=format&fit=crop&w=900&q=60',
+  'cheeseburger': '/images/cheeseburgers.jpg',
+  'double-burger': '/images/double-burger.jpg',
+  'fries': '/images/Fries.jpg',
+  'coke-soda': '/images/coke.jpg',
 
   // Japanese
-  'sushi-maki': 'https://images.unsplash.com/photo-1541696432-82c6da8ce7bf?auto=format&fit=crop&w=900&q=60',
-  'nigiri-set': 'https://images.unsplash.com/photo-1553621042-f6e147245754?auto=format&fit=crop&w=900&q=60',
-  'ramen-miso': 'https://images.unsplash.com/photo-1543353071-10c8ba85a904?auto=format&fit=crop&w=900&q=60',
-  'chicken-katsu': 'https://images.unsplash.com/photo-1617692855027-7f14c7a19dfb?auto=format&fit=crop&w=900&q=60',
+  'sushi-maki': '/images/sushi-maki.jpg',
+  'nigiri-set': '/images/NigiriSet.jpg',
+  'ramen-miso': '/images/MisoRamen.jpg',
+  'chicken-katsu': '/images/Chicken-Katsu.jpg',
 
   // Vietnamese
-  'pho-bo': 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=900&q=60',
-  'banh-mi-thit': 'https://images.unsplash.com/photo-1604908176997-4315800de8be?auto=format&fit=crop&w=900&q=60',
-  'bun-bo-hue': 'https://images.unsplash.com/photo-1593062096033-9a26b09456f5?auto=format&fit=crop&w=900&q=60',
-  'com-tam': 'https://images.unsplash.com/photo-1617195737494-8c31fe6df024?auto=format&fit=crop&w=900&q=60',
-  'goi-cuon': 'https://images.unsplash.com/photo-1604908554054-5ccef72e99de?auto=format&fit=crop&w=900&q=60',
-  'bun-cha-ha-noi': 'https://images.unsplash.com/photo-1574484284002-952d92456975?auto=format&fit=crop&w=900&q=60',
-  'banh-xeo': 'https://images.unsplash.com/photo-1625944525268-8f6fe57a19f9?auto=format&fit=crop&w=900&q=60',
-  'mi-quang': 'https://images.unsplash.com/photo-1526318472351-c75fcf070305?auto=format&fit=crop&w=900&q=60',
-  'bo-kho-banh-mi': 'https://images.unsplash.com/photo-1625944525301-8c1f57a19f9c?auto=format&fit=crop&w=900&q=60',
-  'hu-tieu-nam-vang': 'https://images.unsplash.com/photo-1569718212165-3fefc33b1a5a?auto=format&fit=crop&w=900&q=60',
+  'pho-bo': '/images/pho-bo.jpg',
+  'banh-mi-thit': '/images/banhmi.jpg',
+  'bun-bo-hue': '/images/bun-bo-hue.jpg',
+  'com-tam': '/images/com-tam.jpg',
+  'goi-cuon': '/images/goi-cuon.jpg',
+  'bun-cha-ha-noi': '/images/bun-cha-ha-noi.jpg',
+  'banh-xeo': '/images/banh-xeo.jpg',
+  'mi-quang': '/images/mi-quang.jpg',
+  'bo-kho-banh-mi': '/images/bo-kho-banh-mi.jpg',
+  'hu-tieu-nam-vang': '/images/hu-tieu-nam-vang.jpg',
 
   // Mexican
-  'taco-bo': 'https://images.unsplash.com/photo-1601050690597-9d43e6234943?auto=format&fit=crop&w=900&q=60',
-  'chicken-burrito': 'https://images.unsplash.com/photo-1599974579688-8dbdd7a93f5f?auto=format&fit=crop&w=900&q=60',
-  'quesadilla': 'https://images.unsplash.com/photo-1615873968403-89e72eb38c80?auto=format&fit=crop&w=900&q=60',
+  'taco-bo': '/images/taco-thit-bo.jpg',
+  'chicken-burrito': '/images/chicken-burrito.jpg',
+  'quesadilla': '/images/quesadilla.jpg',
 
   // Chicken / Steak
-  'ga-ran': 'https://images.unsplash.com/photo-1604908554049-1f1d2bcb1a8a?auto=format&fit=crop&w=900&q=60',
-  'steak-bit-tet': 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=900&q=60',
+  'ga-ran': '/images/ga-ran.jpg',
+  'steak-bit-tet': '/images/bit-tet.jpg',
 
   // Thai / Asian
-  'pad-thai': 'https://images.unsplash.com/photo-1600628421205-4f68a6f2ef14?auto=format&fit=crop&w=900&q=60',
-  'com-chien-duong-chau': 'https://images.unsplash.com/photo-1590758036263-9f1b5d3b5a61?auto=format&fit=crop&w=900&q=60',
+  'pad-thai': '/images/pad-thai.jpg',
+  'com-chien-duong-chau': '/images/com_chien_duong_chau.jpg',
 
   // Salad & Drinks & Desserts
-  'caesar-salad': 'https://images.unsplash.com/photo-1551892374-ecf8754cf8b5?auto=format&fit=crop&w=900&q=60',
-  'greek-salad': 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=900&q=60',
-  'tra-sua-tran-chau': 'https://images.unsplash.com/photo-1586201375761-83865001e31b?auto=format&fit=crop&w=900&q=60',
-  'nuoc-cam-ep': 'https://images.unsplash.com/photo-1571076172156-7a5b26f61f4a?auto=format&fit=crop&w=900&q=60',
-  'che-ba-mau': 'https://images.unsplash.com/photo-1604908553651-1e9ebcca40fe?auto=format&fit=crop&w=900&q=60',
+  'caesar-salad': '/images/caesar-salad.jpg',
+  'greek-salad': '/images/greek-salad.jpg',
+  'tra-sua-tran-chau': '/images/tra-sua-tran-chau.jpg',
+  'nuoc-cam-ep': '/images/nuoc-cam-ep.jpg',
+  'che-ba-mau': '/images/che-ba-mau.jpg',
 }
 
 function slugify(name: string) {
