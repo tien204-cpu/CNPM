@@ -11,15 +11,15 @@ app.use(express.json());
 app.use((req: any, res: any, next: any) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
 // simple upload endpoint: accepts field name 'file', stores into IMAGES_DIR, returns /images/<filename>
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, IMAGES_DIR),
-  filename: (req, file, cb) => {
+  destination: (req: any, file: any, cb: (error: any, destination: string) => void) => cb(null, IMAGES_DIR),
+  filename: (req: any, file: any, cb: (error: any, filename: string) => void) => {
     const safe = (file.originalname || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
     const name = `${Date.now()}-${safe}`;
     cb(null, name);

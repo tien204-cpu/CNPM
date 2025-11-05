@@ -28,6 +28,9 @@ function ImageWithPlaceholder({ src, srcList = [], alt, className, style }: { sr
         src={current}
         alt={alt}
         loading="lazy"
+        width={640}
+        height={360}
+        decoding="async"
         referrerPolicy="no-referrer"
         className={className}
         style={{ ...(loaded ? {} : { display: 'none' }), ...(style || {}) }}
@@ -177,6 +180,12 @@ export default function App() {
     return 'Khác'
   }
 
+  function normCat(c?: string) {
+    const t = (c || '').trim()
+    if (!t) return t
+    return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase()
+  }
+
   function getImageUrl(p: { id: string; name: string }) {
     const name = (p.name || '').toLowerCase()
     const seed = encodeURIComponent(name.replace(/\s+/g, '-'))
@@ -210,7 +219,8 @@ export default function App() {
     const mapped = getMappedImage({ id: p.id, name: p.name }) || ''
     const explicit = p.imageUrl || ''
     const cat = getImageUrl({ id: p.id, name: p.name })
-    return [...locals, mapped, explicit, cat].filter(Boolean)
+    const chain = [...locals, explicit, mapped, cat]
+    return chain.filter(Boolean)
   }
 
   function pickRecommended(list: Product[], count = 9) {
@@ -289,7 +299,13 @@ export default function App() {
     }
   }
 
-  function logout() { setUser(null); try { localStorage.removeItem('ff_user') } catch (e) {} }
+  function logout() {
+    setUser(null)
+    setCart([])
+    setLastOrder(null)
+    try { localStorage.removeItem('ff_user') } catch (e) {}
+    go('/')
+  }
 
   async function place() {
     if (!user) { alert('Vui lòng đăng nhập hoặc đăng ký trước khi đặt hàng'); go('/login'); return }
@@ -314,10 +330,11 @@ export default function App() {
   }
 
   function ProductList() {
-    const cats = Array.from(new Set(products.map(p => categoryOf(p.name))))
+    const cats = Array.from(new Set(products.map(p => normCat((p as any).category || categoryOf(p.name)))))
     let filtered = products.filter(p => (p.name || '').toLowerCase().includes(search.toLowerCase()))
     if (selectedCategory && selectedCategory !== 'Tất cả') {
-      filtered = filtered.filter(p => categoryOf(p.name) === selectedCategory)
+      const want = normCat(selectedCategory)
+      filtered = filtered.filter(p => normCat(((p as any).category) || categoryOf(p.name)) === want)
     }
     const min = minPrice ? parseFloat(minPrice) : undefined
     const max = maxPrice ? parseFloat(maxPrice) : undefined
@@ -372,7 +389,7 @@ export default function App() {
               {list.map(p => (
                 <div key={p.id} className="product-card">
                   <div className="product-media" onClick={() => go(`/product/${p.id}`)} style={{ cursor: 'pointer' }}>
-                    <div className="badge">{categoryOf(p.name)}</div>
+                    <div className="badge">{normCat((p as any).category || categoryOf(p.name))}</div>
                     {(() => { const c = imageCandidates(p); return <ImageWithPlaceholder key={p.id} src={c[0]} srcList={c.slice(1)} alt={p.name} /> })()}
                   </div>
                   <div className="product-body">

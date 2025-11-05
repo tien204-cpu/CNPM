@@ -9,6 +9,17 @@ function val(id: string) {
   const el = document.getElementById(id) as HTMLInputElement | null
   return el ? el.value : ''
 }
+function fileOf(id: string): File | null {
+  const el = document.getElementById(id) as HTMLInputElement | null
+  const f = el && el.files && el.files[0]
+  return (f as any) || null
+}
+async function uploadImage(file: File): Promise<string> {
+  const fd = new FormData()
+  fd.append('file', file)
+  const r = await axios.post(`${PRODUCT_BASE.replace(/\/$/, '')}/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+  return r?.data?.path || ''
+}
 
 function useAuth() {
   const initial = (() => {
@@ -65,7 +76,7 @@ function Section({ title, children }: { title: string; children: any }) {
 export default function Admin() {
   const { token, role, ready } = useAuth()
   const headers = useMemo(() => token ? { Authorization: `Bearer ${token}` } : {}, [token])
-  const [tab, setTab] = useState<'products'|'users'|'orders'>('products')
+  const [tab, setTab] = useState<'products'|'users'|'orders'>('orders')
 
   const [products, setProducts] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
@@ -77,6 +88,7 @@ export default function Admin() {
   const pImageRef = useRef<HTMLInputElement>(null)
   const pDescRef = useRef<HTMLInputElement>(null)
   const pStockRef = useRef<HTMLInputElement>(null)
+  const pFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!ready) return
@@ -102,14 +114,54 @@ export default function Admin() {
   useEffect(() => { if (role==='admin') refreshUsers() }, [role])
   useEffect(() => { refreshOrders() }, [])
 
+  // Realtime updates for orders via SSE
+  const esOrdersRef = useRef<Record<string, EventSource>>({})
+  useEffect(() => {
+    const current = esOrdersRef.current || {}
+    const ids = new Set(orders.map(o => o.id))
+    // close listeners for orders no longer listed
+    for (const id of Object.keys(current)) {
+      if (!ids.has(id)) { try { current[id].close() } catch {}; delete current[id] }
+    }
+    // attach listeners for new orders
+    for (const o of orders) {
+      if (!current[o.id]) {
+        try {
+          const es = new EventSource(`${ORDER_BASE.replace(/\/$/, '')}/orders/${o.id}/events`)
+          es.addEventListener('status', (ev: any) => {
+            try {
+              const data = JSON.parse(ev.data || '{}')
+              setOrders(prev => prev.map(px => px.id === o.id ? { ...px, status: data.status } : px))
+            } catch {}
+          })
+          es.addEventListener('deleted', () => {
+            setOrders(prev => prev.filter(px => px.id !== o.id))
+          })
+          current[o.id] = es
+        } catch {}
+      }
+    }
+    esOrdersRef.current = current
+    return () => {
+      for (const id of Object.keys(current)) { try { current[id].close() } catch {} }
+    }
+  }, [orders])
+
   async function addProduct() {
     const name = pNameRef.current?.value?.trim() || ''
     const price = Number(pPriceRef.current?.value || 0)
     const category = pCategoryRef.current?.value?.trim() || ''
-    const imageUrl = pImageRef.current?.value?.trim() || ''
+    let imageUrl = pImageRef.current?.value?.trim() || ''
     const description = pDescRef.current?.value?.trim() || ''
     const stock = Number(pStockRef.current?.value || 100)
     if (!name || !price) { alert('Vui lòng nhập tên và giá'); return }
+    try {
+      const file = pFileRef.current?.files && pFileRef.current.files[0]
+      if (file) {
+        const path = await uploadImage(file)
+        if (path) imageUrl = path
+      }
+    } catch {}
     await axios.post(`${PRODUCT_BASE.replace(/\/$/, '')}/products`, { name, price, stock, imageUrl, description, category })
     await refreshProducts()
     if (pNameRef.current) pNameRef.current.value = ''
@@ -118,6 +170,7 @@ export default function Admin() {
     if (pImageRef.current) pImageRef.current.value = ''
     if (pDescRef.current) pDescRef.current.value = ''
     if (pStockRef.current) pStockRef.current.value = ''
+    if (pFileRef.current) pFileRef.current.value = ''
   }
 
   async function updateProduct(p: any) {
@@ -129,6 +182,13 @@ export default function Admin() {
       description: val(`p-desc-${p.id}`),
       stock: Number(val(`p-stock-${p.id}`) || p.stock),
     }
+    try {
+      const f = fileOf(`p-file-${p.id}`)
+      if (f) {
+        const up = await uploadImage(f)
+        if (up) payload.imageUrl = up
+      }
+    } catch {}
     await axios.put(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${p.id}`, payload)
     await refreshProducts()
   }
@@ -189,6 +249,7 @@ export default function Admin() {
             <div className="form-row"><label>Giá</label><input className="input" placeholder="Giá" inputMode="decimal" ref={pPriceRef} autoComplete="off" /></div>
             <div className="form-row"><label>Danh mục</label><input className="input" placeholder="Danh mục" ref={pCategoryRef} autoComplete="off" /></div>
             <div className="form-row"><label>Ảnh (URL hoặc /images/...)</label><input className="input" placeholder="/images/pho-bo.jpg" ref={pImageRef} autoComplete="off" /></div>
+            <div className="form-row"><label>Tải ảnh</label><input type="file" accept="image/*" ref={pFileRef} /></div>
             <div className="form-row"><label>Mô tả</label><input className="input" placeholder="Mô tả chi tiết" ref={pDescRef} autoComplete="off" /></div>
             <div className="form-row"><label>Tồn kho</label><input className="input" placeholder="100" inputMode="numeric" ref={pStockRef} autoComplete="off" /></div>
             <button className="btn primary" onClick={addProduct}>Thêm</button>
@@ -216,7 +277,12 @@ export default function Admin() {
                         <td><input id={`p-price-${p.id}`} className="input" defaultValue={String(p.price)} /></td>
                         <td><input id={`p-category-${p.id}`} className="input" defaultValue={p.category || ''} /></td>
                         <td><input id={`p-stock-${p.id}`} className="input" defaultValue={String(p.stock)} /></td>
-                        <td><input id={`p-image-${p.id}`} className="input" defaultValue={p.imageUrl || ''} /></td>
+                        <td>
+                          <input id={`p-image-${p.id}`} className="input" defaultValue={p.imageUrl || ''} />
+                          <div style={{ marginTop: 6 }}>
+                            <input id={`p-file-${p.id}`} type="file" accept="image/*" />
+                          </div>
+                        </td>
                         <td><input id={`p-desc-${p.id}`} className="input" defaultValue={p.description || ''} /></td>
                         <td style={{ whiteSpace: 'nowrap' }}>
                           <button className="btn small" onClick={() => updateProduct(p)}>Lưu</button>
@@ -293,11 +359,14 @@ export default function Admin() {
                     <td>{o.createdAt ? new Date(o.createdAt).toLocaleString() : ''}</td>
                     <td>${Number(o.total || 0).toFixed(2)}</td>
                     <td>
-                      <select value={o.status || ''} onChange={e => updateOrderStatus(o, e.target.value)}>
-                        <option>Bắt đầu giao</option>
-                        <option>Đang giao</option>
-                        <option>Đã giao đồ ăn</option>
-                      </select>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span className="badge">{o.status || ''}</span>
+                        <select value={o.status || ''} onChange={e => updateOrderStatus(o, e.target.value)}>
+                          <option>Bắt đầu giao</option>
+                          <option>Đang giao</option>
+                          <option>Đã giao đồ ăn</option>
+                        </select>
+                      </div>
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       <button className="btn small ghost" onClick={() => deleteOrder(o.id)}>Xoá</button>

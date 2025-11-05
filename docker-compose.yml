@@ -32,10 +32,13 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:postgres@db:5432/foodfast?schema=product
       PORT: 3002
+      IMAGES_DIR: /images
     ports:
       - "3002:3002"
     depends_on:
       - db
+    volumes:
+      - ./images:/images
 
   order:
     build: ./services/order
