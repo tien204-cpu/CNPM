@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
+import multer from 'multer';
 
 const app = express();
 app.use(express.json());
@@ -13,6 +14,34 @@ app.use((req: any, res: any, next: any) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
+});
+
+// simple upload endpoint: accepts field name 'file', stores into IMAGES_DIR, returns /images/<filename>
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, IMAGES_DIR),
+  filename: (req, file, cb) => {
+    const safe = (file.originalname || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const name = `${Date.now()}-${safe}`;
+    cb(null, name);
+  }
+});
+const upload = multer({ storage });
+app.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const f: any = (req as any).file;
+    if (!f) return res.status(400).json({ error: 'file required' });
+    const out = {
+      ok: true,
+      filename: f.filename,
+      path: `/images/${f.filename}`,
+      size: f.size,
+      mime: f.mimetype
+    };
+    appendLog({ route: '/upload', file: out });
+    res.json(out);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
 });
 
 // request logging middleware: log every incoming request body/headers/path
@@ -28,6 +57,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 const PORT = process.env.PORT || 3002;
 const prisma = new PrismaClient();
 const LOG_PATH = process.env.DEBUG_LOG_PATH || '/tmp/product-debug.log';
+const IMAGES_DIR = process.env.IMAGES_DIR || '/images';
+try { fs.mkdirSync(IMAGES_DIR, { recursive: true }); } catch {}
 
 function appendLog(entry: any) {
   try {
@@ -130,11 +161,49 @@ app.get('/products/:id', async (req: Request, res: Response) => {
 
 app.post('/products', async (req: Request, res: Response) => {
   try {
-    const { name, price, stock, imageUrl, description } = req.body;
-    const p = await prisma.product.create({ data: { name, price: Number(price), stock: Number(stock), imageUrl, description } });
+    const { name, price, stock, imageUrl, description, category } = req.body as any;
+    const data: any = {
+      name,
+      price: Number(price),
+      stock: Number(stock ?? 100),
+      imageUrl: imageUrl || null,
+      description: description || null,
+      category: category || null,
+    };
+    const p = await prisma.product.create({ data });
     res.json(p);
   } catch (e: any) {
     console.error('create product error', e);
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.put('/products/:id', async (req: Request, res: Response) => {
+  const id = req.params.id
+  try {
+    const { name, price, stock, imageUrl, description, category } = req.body as any;
+    const data: any = {}
+    if (name !== undefined) data.name = name
+    if (price !== undefined) data.price = Number(price)
+    if (stock !== undefined) data.stock = Number(stock)
+    if (imageUrl !== undefined) data.imageUrl = imageUrl
+    if (description !== undefined) data.description = description
+    if (category !== undefined) data.category = category
+    const p = await prisma.product.update({ where: { id }, data })
+    res.json(p)
+  } catch (e: any) {
+    console.error('update product error', e);
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.delete('/products/:id', async (req: Request, res: Response) => {
+  const id = req.params.id
+  try {
+    await prisma.product.delete({ where: { id } })
+    res.json({ ok: true })
+  } catch (e: any) {
+    console.error('delete product error', e);
     res.status(500).json({ error: e?.message || String(e) });
   }
 });

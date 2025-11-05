@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef } from 'react'
 import axios from 'axios'
 import './App.css'
 import { getMappedImage } from './image-map'
+import Admin from './Admin'
 
 const PRODUCT_BASE = import.meta.env.VITE_PRODUCT_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3002'
 const USER_BASE = import.meta.env.VITE_USER_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3001'
@@ -118,6 +119,24 @@ export default function App() {
     }
     load()
   }, [])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('ff_user')
+      if (raw) {
+        const u = JSON.parse(raw)
+        if (u && u.email) setUser(u)
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    const r = route || '/'
+    const isAuthPage = r === '/login' || r === '/register'
+    if ((user as any)?.role === 'admin' && isAuthPage) {
+      go('/admin')
+    }
+  }, [user, route])
 
   function slugify(name: string) {
     return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
@@ -248,7 +267,7 @@ export default function App() {
         const meResp = await axios.get(`${USER_BASE.replace(/\/$/, '')}/me`, { headers: { Authorization: `Bearer ${token}` } })
         me = meResp.data
       } catch (e) {}
-      const u = { id: me?.id || '', email, token }
+      const u = { id: me?.id || '', email, token, role: me?.role || 'user' }
       setUser(u)
       localStorage.setItem('ff_user', JSON.stringify(u))
       setAuthEmail('')
@@ -256,7 +275,8 @@ export default function App() {
       setAuthName('')
       setAuthPhone('')
       setAuthAddress('')
-      go('/')
+      if ((u as any).role === 'admin') go('/admin')
+      else go('/')
     } catch (e: any) {
       const status = e?.response?.status
       const serverMsg = e?.response?.data?.error || e.message
@@ -426,6 +446,20 @@ export default function App() {
         axios.get(`${ORDER_BASE.replace(/\/$/, '')}/orders/${id}`).then(r => setOrder(r.data)).catch(() => {})
       }
     }, [id])
+    useEffect(() => {
+      if (!id) return
+      let es: EventSource | null = null
+      try {
+        es = new EventSource(`${ORDER_BASE.replace(/\/$/, '')}/orders/${id}/events`)
+        es.addEventListener('status', (ev: any) => {
+          try {
+            const data = JSON.parse(ev.data || '{}')
+            setOrder((o: any) => ({ ...(o || {}), status: data.status }))
+          } catch {}
+        })
+      } catch {}
+      return () => { try { es && es.close() } catch {} }
+    }, [id])
     if (!order) return <div className="page"><div className="card"><div className="loading">Đang tải đơn hàng...</div></div></div>
     const items: Array<{ productId: string; qty: number }> = order.items || []
     const total = order.total || 0
@@ -436,6 +470,7 @@ export default function App() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div><b>Mã đơn:</b> {order.id}</div>
             {order.createdAt && <div><b>Thời gian:</b> {new Date(order.createdAt).toLocaleString()}</div>}
+            {order.status && <div><b>Trạng thái:</b> {order.status}</div>}
             <div><b>Người nhận:</b> {order.shippingName || order?.shipping?.name || shipName}</div>
             <div><b>Điện thoại:</b> {order.shippingPhone || order?.shipping?.phone || shipPhone}</div>
             <div><b>Địa chỉ:</b> {order.shippingAddress || order?.shipping?.address || shipAddress}</div>
@@ -476,6 +511,35 @@ export default function App() {
       const url = `${ORDER_BASE.replace(/\/$/, '')}/orders` + (email ? `?email=${encodeURIComponent(email)}` : '')
       axios.get(url).then(r => setOrders(r.data || [])).catch(() => setOrders([]))
     }, [user])
+    const esRef = useRef<Record<string, EventSource>>({})
+    useEffect(() => {
+      // attach SSE listeners per order to update status realtime
+      const current = esRef.current || {}
+      const activeIds = new Set(orders.map(o => o.id))
+      // close removed
+      for (const id of Object.keys(current)) {
+        if (!activeIds.has(id)) { try { current[id].close() } catch {}; delete current[id] }
+      }
+      // open new
+      for (const o of orders) {
+        if (!current[o.id]) {
+          try {
+            const es = new EventSource(`${ORDER_BASE.replace(/\/$/, '')}/orders/${o.id}/events`)
+            es.addEventListener('status', (ev: any) => {
+              try {
+                const data = JSON.parse(ev.data || '{}')
+                setOrders(prev => prev.map(px => px.id === o.id ? { ...px, status: data.status } : px))
+              } catch {}
+            })
+            current[o.id] = es
+          } catch {}
+        }
+      }
+      esRef.current = current
+      return () => {
+        for (const id of Object.keys(current)) { try { current[id].close() } catch {} }
+      }
+    }, [orders])
     return (
       <div className="page">
         <h2>Lịch sử mua hàng</h2>
@@ -488,7 +552,7 @@ export default function App() {
                 <li key={o.id} style={{ padding: 8, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600 }}>Đơn #{o.id.slice(0,6)} • ${Number(o.total).toFixed(2)}</div>
-                    <div style={{ color: 'var(--muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleString() : ''} • {o.paymentMethod || 'COD'}</div>
+                    <div style={{ color: 'var(--muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleString() : ''} • {o.paymentMethod || 'COD'} • {o.status || ''}</div>
                     <div style={{ color: 'var(--muted)' }}>Địa chỉ: {o.shippingAddress || ''}</div>
                   </div>
                   <a className="btn small ghost" href={`#/bill/${o.id}`}>Xem hoá đơn</a>
@@ -602,6 +666,7 @@ export default function App() {
             <a href="#/">Trang chủ</a>
             <a href="#/cart">Giỏ hàng</a>
             <a href="#/history">Lịch sử</a>
+            {user && (user as any).role === 'admin' && <a href="#/admin">Admin</a>}
             {user ? (
               <>
                 <span className="user-email">{user.email}</span>
@@ -641,6 +706,8 @@ export default function App() {
             <AuthPage />
           ) : route === '/checkout' ? (
             <CheckoutPage />
+          ) : route === '/admin' ? (
+            <Admin />
           ) : (
             <ProductList />
           )}

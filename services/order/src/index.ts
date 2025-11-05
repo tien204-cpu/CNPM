@@ -41,6 +41,36 @@ const PAYMENT_URL = process.env.PAYMENT_URL || 'http://payment:3004';
 
 const prisma = new PrismaClient();
 
+const listeners = new Map<string, Set<Response>>();
+function sendEvent(res: Response, event: string, data: any) {
+  try {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  } catch {}
+}
+function broadcast(orderId: string, event: string, data: any) {
+  const set = listeners.get(orderId);
+  if (!set) return;
+  for (const res of [...set]) {
+    sendEvent(res, event, data);
+  }
+}
+async function setStatus(orderId: string, status: string) {
+  const o = await prisma.order.update({ where: { id: orderId }, data: { status } });
+  broadcast(orderId, 'status', { id: orderId, status });
+  return o;
+}
+function randomMs(min: number, max: number) { return Math.floor(Math.random() * (max - min + 1)) + min }
+async function simulate(orderId: string) {
+  try {
+    // wait 15-30s then Đang giao, rồi 15-30s nữa thì Đã giao đồ ăn
+    await new Promise(r => setTimeout(r, randomMs(15000, 30000)));
+    await setStatus(orderId, 'Đang giao');
+    await new Promise(r => setTimeout(r, randomMs(15000, 30000)));
+    await setStatus(orderId, 'Đã giao đồ ăn');
+  } catch (e) {}
+}
+
 const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 async function axiosWithRetry(method: 'get'|'post', url: string, data?: any, config: any = {}, retries = 3, backoff = 300): Promise<any> {
   for (let i = 0; i < retries; i++) {
@@ -128,6 +158,7 @@ app.post('/orders', async (req: any, res: any) => {
       order = await prisma.order.create({
         data: {
           total,
+          status: 'Bắt đầu giao',
           userEmail: userEmail || null,
           shippingName: shipping?.name || null,
           shippingPhone: shipping?.phone || null,
@@ -138,6 +169,8 @@ app.post('/orders', async (req: any, res: any) => {
         include: { items: true }
       });
 
+      // Start realtime delivery simulation
+      try { setImmediate(() => simulate(order.id)); } catch {}
       res.json(order);
   } catch (err: any) {
       // if any error after partial decrements, try to roll them back
@@ -174,6 +207,46 @@ app.get('/orders/:id', async (req: any, res: any) => {
   const o = await prisma.order.findUnique({ where: { id }, include: { items: true } });
   if (!o) return res.status(404).json({ error: 'not found' });
   res.json(o);
+});
+
+app.get('/orders/:id/events', async (req: any, res: any) => {
+  const id = req.params.id as string;
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+  if (!listeners.has(id)) listeners.set(id, new Set());
+  listeners.get(id)!.add(res);
+  const onClose = () => {
+    try { listeners.get(id)?.delete(res); } catch {}
+  };
+  req.on('close', onClose);
+  const current = await prisma.order.findUnique({ where: { id } });
+  if (current) sendEvent(res, 'status', { id, status: current.status });
+});
+
+app.patch('/orders/:id', async (req: any, res: any) => {
+  const id = req.params.id as string;
+  const { status } = req.body as any;
+  if (!status) return res.status(400).json({ error: 'status required' });
+  try {
+    const o = await setStatus(id, status);
+    res.json(o);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.delete('/orders/:id', async (req: any, res: any) => {
+  const id = req.params.id as string;
+  try {
+    await prisma.orderItem.deleteMany({ where: { orderId: id } });
+    await prisma.order.delete({ where: { id } });
+    broadcast(id, 'deleted', { id });
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
 });
 
 app.listen(PORT, () => console.log(`Order service running on ${PORT}`));
