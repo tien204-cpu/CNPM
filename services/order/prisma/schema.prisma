@@ -10,20 +10,22 @@ datasource db {
 model Order {
   id         String @id @default(cuid())
   total      Float
-  status     String @default("Bắt đầu giao")
+  status     String @default("Điều drone tới nhà hàng")
   createdAt  DateTime @default(now())
   userEmail  String?
   shippingName String?
   shippingPhone String?
   shippingAddress String?
   paymentMethod String?
+  shippingLat  Float?
+  shippingLng  Float?
   items      OrderItem[]
 }
 
 model OrderItem {
   id        String @id @default(cuid())
   order     Order  @relation(fields: [orderId], references: [id])
-  status     String @default("Bắt đầu giao")
+  status     String @default("Điều drone tới nhà hàng")
   orderId   String
   productId String
   qty       Int

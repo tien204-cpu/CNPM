@@ -416,13 +416,7 @@ export default function App() {
         <h2>{authMode === 'login' ? 'Đăng nhập' : 'Đăng ký'}</h2>
         <div className="card">
           {authError && <div className="error">{authError}</div>}
-          <div className="form-row">
-            <label>Chế độ</label>
-            <select value={authMode} onChange={e => { const v = e.target.value as any; setAuthMode(v); go(v === 'login' ? '/login' : '/register') }}>
-              <option value="login">Đăng nhập</option>
-              <option value="register">Đăng ký</option>
-            </select>
-          </div>
+          {/* bỏ lựa chọn chế độ, dùng đường dẫn /login hoặc /register */}
           <div className="form-row">
             <label>Email</label>
             <input className="input" placeholder="email" type="email" name="email" inputMode="email" autoComplete={authMode === 'login' ? 'username' : 'email'} defaultValue={authEmail} ref={emailRef} />
@@ -514,7 +508,8 @@ export default function App() {
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
             <a className="btn ghost" href="#/">Về trang chủ</a>
-            <a className="btn primary" href="#/history">Xem lịch sử mua hàng</a>
+            <a className="btn primary" href={`#/track/${id}`}>Theo dõi đơn hàng</a>
+            <a className="btn ghost" href="#/history">Lịch sử</a>
           </div>
         </div>
       </div>
@@ -566,16 +561,183 @@ export default function App() {
           ) : (
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               {orders.map((o: any) => (
-                <li key={o.id} style={{ padding: 8, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <li key={o.id} style={{ padding: 8, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, justifyContent:'space-between' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600 }}>Đơn #{o.id.slice(0,6)} • ${Number(o.total).toFixed(2)}</div>
-                    <div style={{ color: 'var(--muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleString() : ''} • {o.paymentMethod || 'COD'} • {o.status || ''}</div>
+                    <div style={{ color: 'var(--muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleString() : ''} • {o.paymentMethod || 'COD'}</div>
                     <div style={{ color: 'var(--muted)' }}>Địa chỉ: {o.shippingAddress || ''}</div>
                   </div>
-                  <a className="btn small ghost" href={`#/bill/${o.id}`}>Xem hoá đơn</a>
+                  <div style={{ display:'flex', gap:6 }}>
+                    <a className="btn small ghost" href={`#/bill/${o.id}`}>Hóa đơn</a>
+                    <a className="btn small primary" href={`#/track/${o.id}`}>Theo dõi</a>
+                  </div>
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  function StepBar({ status }: { status?: string }) {
+    const steps = [
+      { key: 'to_rest', label: 'Điều drone tới nhà hàng', icon: '🚁' },
+      { key: 'pickup', label: 'Bắt đầu lấy đồ ăn', icon: '🥡' },
+      { key: 'ready', label: 'Chuẩn bị giao hàng', icon: '📦' },
+      { key: 'shipping', label: 'Đang giao đồ ăn bằng drone', icon: '🚁' },
+      { key: 'done', label: 'Đã giao đồ ăn tới nhà', icon: '🏠' }
+    ]
+    // map our service statuses to step index
+    const map: Record<string, number> = {
+      'Điều drone tới nhà hàng': 0,
+      'Bắt đầu lấy đồ ăn': 1,
+      'Chuẩn bị giao hàng': 2,
+      'Đang giao đồ ăn bằng drone': 3,
+      'Đã giao đồ ăn tới nhà': 4
+    }
+    const idx = typeof status === 'string' && status in map ? map[status] : 0
+    const progressPct = Math.max(0, Math.min(100, (idx / (steps.length - 1)) * 100))
+    return (
+      <div className="steps">
+        <div className="rail"><div className="fill" style={{ width: `${progressPct}%` }} /></div>
+        {steps.map((s, i) => (
+          <div key={s.key} className={`step${i < idx ? ' completed' : (i===idx ? ' active' : '')}`}>
+            <div className="circle" aria-hidden>{s.icon}</div>
+            <div className="label">{s.label}</div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  function TrackPage({ id }: { id: string }) {
+    const [order, setOrder] = useState<any>(null)
+    const mapRef = useRef<any>(null)
+    const markerRef = useRef<any>(null)
+    const routeRef = useRef<any>(null)
+    useEffect(() => {
+      // init map immediately so user sees base map even before route events
+      try {
+        if ((window as any).L && !mapRef.current) {
+          const L = (window as any).L
+          const center = [10.776889, 106.700806]
+          mapRef.current = L.map('trackmap').setView(center, 13)
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapRef.current)
+        }
+      } catch {}
+      axios.get(`${ORDER_BASE.replace(/\/$/, '')}/orders/${id}`).then(r => setOrder(r.data)).catch(() => {})
+      let es: EventSource | null = null
+      try {
+        es = new EventSource(`${ORDER_BASE.replace(/\/$/, '')}/orders/${id}/events`)
+        es.addEventListener('status', (ev: any) => {
+          try { const data = JSON.parse(ev.data || '{}'); setOrder((o: any) => ({ ...(o||{}), status: data.status })); } catch {}
+        })
+        es.addEventListener('drone', (ev: any) => {
+          try {
+            const data = JSON.parse(ev.data || '{}')
+            if (!(window as any).L) return
+            const L = (window as any).L
+            if (!mapRef.current) {
+              const center = [10.776889, 106.700806]
+              mapRef.current = L.map('trackmap').setView(center, 13)
+              L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapRef.current)
+            }
+            if (data.type === 'route' && Array.isArray(data.path)) {
+              const latlngs = data.path.map((p: any) => [p.lat, p.lng])
+              if (routeRef.current) { try { mapRef.current.removeLayer(routeRef.current) } catch {} }
+              routeRef.current = L.polyline(latlngs, { color: '#7c3aed' }).addTo(mapRef.current)
+              mapRef.current.fitBounds(routeRef.current.getBounds(), { padding: [20, 20] })
+              if (!markerRef.current) markerRef.current = L.marker(latlngs[0]).addTo(mapRef.current)
+              else markerRef.current.setLatLng(latlngs[0])
+            } else if (data.type === 'pos' && typeof data.lat === 'number' && typeof data.lng === 'number') {
+              if (!markerRef.current) {
+                markerRef.current = (window as any).L.marker([data.lat, data.lng]).addTo(mapRef.current)
+              } else { markerRef.current.setLatLng([data.lat, data.lng]) }
+            } else if (data.type === 'arrived') {
+              // nothing, user waits for admin to confirm delivered
+            }
+          } catch {}
+        })
+      } catch {}
+      return () => { try { es && es.close() } catch {} }
+    }, [id])
+    return (
+      <div className="page">
+        <h2>Theo dõi đơn hàng</h2>
+        <div className="card">
+          <div id="trackmap" style={{ width:'100%', height: 360, borderRadius: 12 }} />
+          <div style={{ marginTop: 12 }}>
+            <StepBar status={order?.status} />
+          </div>
+          <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+            <a className="btn ghost" href={`#/bill/${id}`}>Xem hoá đơn</a>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function RestaurantsPage() {
+    const [list, setList] = useState<any[]>([])
+    useEffect(() => { axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants`).then(r => setList(r.data||[])).catch(() => setList([])) }, [])
+    return (
+      <div className="page">
+        <h2>Nhà hàng</h2>
+        <div className="card">
+          {list.length === 0 ? <div className="loading">Chưa có nhà hàng</div> : (
+            <div className="restaurants-grid">
+              {list.map(r => (
+                <div key={r.id} className="restaurant-card">
+                  <div className="restaurant-body">
+                    <div className="restaurant-name">{r.name}</div>
+                    {r.address && <div className="restaurant-addr">{r.address}</div>}
+                    <div style={{ marginTop: 10 }}>
+                      <a className="btn primary" href={`#/restaurant/${r.id}`}>Xem menu</a>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  function RestaurantDetailPage({ id }: { id: string }) {
+    const [restaurant, setRestaurant] = useState<any>(null)
+    const [list, setList] = useState<Product[]>([])
+    useEffect(() => {
+      axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${id}`).then(r => setRestaurant(r.data)).catch(() => setRestaurant(null))
+      axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products`).then(r => setList(r.data||[])).catch(() => setList([]))
+    }, [id])
+    const items = list.filter((p: any) => (p.restaurantId || '') === id)
+    return (
+      <div className="page">
+        <h2>{restaurant?.name || 'Nhà hàng'}</h2>
+        <div className="card">
+          {restaurant?.address && <div style={{ marginBottom: 12, color: 'var(--muted)' }}>Địa chỉ: {restaurant.address}</div>}
+          {items.length === 0 ? <div className="loading">Nhà hàng chưa có món</div> : (
+            <div className="products-grid">
+              {items.map(p => (
+                <div key={p.id} className="product-card">
+                  <div className="product-media" onClick={() => go(`/product/${p.id}`)} style={{ cursor: 'pointer' }}>
+                    <div className="badge">{normCat((p as any).category || categoryOf(p.name))}</div>
+                    {(() => { const c = imageCandidates(p); return <ImageWithPlaceholder key={p.id} src={c[0]} srcList={c.slice(1)} alt={p.name} /> })()}
+                  </div>
+                  <div className="product-body">
+                    <div className="product-name">{p.name}</div>
+                    <div className="product-price">${p.price.toFixed(2)}</div>
+                    {p.description && <div className="product-desc">{p.description}</div>}
+                    <div className="product-actions">
+                      <button className="btn primary" onClick={() => add(p.id)}>Thêm</button>
+                      <button className="btn small" onClick={() => changeQty(p.id, +1)}>+1</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -660,6 +822,15 @@ export default function App() {
   function ProductDetail({ id }: { id: string }) {
     const p = products.find(px => px.id === id)
     if (!p) return <div>Không tìm thấy sản phẩm</div>
+    const [rest, setRest] = useState<any>(null)
+    useEffect(() => {
+      const rid = (p as any)?.restaurantId
+      if (rid) {
+        axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${rid}`).then(r => setRest(r.data)).catch(() => setRest(null))
+      } else {
+        setRest(null)
+      }
+    }, [id])
     return (
       <div>
         <button className="btn ghost" onClick={() => go('/')}>Quay lại</button>
@@ -668,6 +839,9 @@ export default function App() {
           {(() => { const c = imageCandidates(p); return <ImageWithPlaceholder src={c[0]} srcList={c.slice(1)} alt={p.name} /> })()}
         </div>
         <p>Giá: ${p.price.toFixed(2)}</p>
+        {rest?.name && (
+          <p>Nhà hàng: <a href={`#/restaurant/${rest.id}`}>{rest.name}</a></p>
+        )}
         {p.description && <p>{p.description}</p>}
         <button className="btn primary" onClick={() => add(p.id)}>Thêm vào giỏ</button>
       </div>
@@ -681,6 +855,7 @@ export default function App() {
           <div className="site-title"><span className="logo">FF</span></div>
           <nav className="nav-links">
             <a href="#/">Trang chủ</a>
+            <a href="#/restaurants">Nhà hàng</a>
             <a href="#/cart">Giỏ hàng</a>
             <a href="#/history">Lịch sử</a>
             {user && (user as any).role === 'admin' && <a href="#/admin">Admin</a>}
@@ -715,6 +890,12 @@ export default function App() {
             <ProductDetail id={route.split('/product/')[1]} />
           ) : route.startsWith('/bill/') ? (
             <BillPage id={route.split('/bill/')[1]} />
+          ) : route.startsWith('/track/') ? (
+            <TrackPage id={route.split('/track/')[1]} />
+          ) : route === '/restaurants' ? (
+            <RestaurantsPage />
+          ) : route.startsWith('/restaurant/') ? (
+            <RestaurantDetailPage id={route.split('/restaurant/')[1]} />
           ) : route === '/history' ? (
             <HistoryPage />
           ) : route === '/cart' ? (

@@ -15,4 +15,25 @@ model Product {
   category  String?
   stock     Int      @default(100)
   createdAt DateTime @default(now())
+  // Optional relation to a Restaurant (nhà hàng)
+  restaurantId String?
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
+}
+
+// Nhà hàng tại Việt Nam (Sài Gòn)
+model Restaurant {
+  id        String    @id @default(cuid())
+  name      String
+  address   String?
+  lat       Float?
+  lng       Float?
+  products  Product[]
+  createdAt DateTime  @default(now())
+}
+
+// Danh mục món ăn (để Admin chọn sẵn thay vì gõ tay)
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
 }

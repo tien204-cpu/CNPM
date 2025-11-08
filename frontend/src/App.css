@@ -170,3 +170,37 @@ aside{min-width:260px}
   .hero-content h1{font-size:34px}
   .filters{flex-direction:row;justify-content:space-between;align-items:center}
 }
+
+/* Tracking steps */
+.steps{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.step{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.step .dot{width:12px;height:12px;border-radius:999px;border:2px solid var(--border);background:#fff}
+.step.active{color:var(--text)}
+.step.active .dot{background:var(--primary);border-color:var(--primary)}
+
+/* Map container spacing */
+.map-container{padding:20px}
+
+/* Steps v2: Shopee-like progress */
+.steps{position:relative;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 8px 0}
+.steps .rail{position:absolute;top:22px;left:24px;right:24px;height:4px;background:var(--border);border-radius:999px;z-index:0}
+.steps .rail .fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:999px;width:0;transition:width .4s ease}
+.steps .step{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--muted);flex:1;z-index:1}
+.steps .step .circle{width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;border:2px solid var(--border);background:#fff;font-size:16px}
+.steps .step.active .circle,.steps .step.completed .circle{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;border-color:transparent;box-shadow:0 8px 18px rgba(124,58,237,0.25)}
+.steps .step .label{font-size:12px;text-align:center;max-width:140px}
+.steps .step.active .label,.steps .step.completed .label{color:var(--text)}
+
+/* Restaurants listing */
+.restaurants-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.restaurant-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.restaurant-body{padding:14px 16px}
+.restaurant-name{font-weight:700}
+.restaurant-addr{color:var(--muted);font-size:13px}
+
+@media (max-width: 1000px){
+  .restaurants-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width: 780px){
+  .restaurants-grid{grid-template-columns:1fr}
+}

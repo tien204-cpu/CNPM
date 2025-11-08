@@ -76,19 +76,30 @@ function Section({ title, children }: { title: string; children: any }) {
 export default function Admin() {
   const { token, role, ready } = useAuth()
   const headers = useMemo(() => token ? { Authorization: `Bearer ${token}` } : {}, [token])
-  const [tab, setTab] = useState<'products'|'users'|'orders'>('orders')
+  const [tab, setTab] = useState<'products'|'users'|'orders'|'restaurants'|'categories'>('orders')
 
   const [products, setProducts] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [orders, setOrders] = useState<any[]>([])
+  const [restaurants, setRestaurants] = useState<any[]>([])
+  const [categories, setCategories] = useState<any[]>([])
+  const [armed, setArmed] = useState<Record<string, boolean>>({})
 
   const pNameRef = useRef<HTMLInputElement>(null)
   const pPriceRef = useRef<HTMLInputElement>(null)
-  const pCategoryRef = useRef<HTMLInputElement>(null)
+  const pCategoryRef = useRef<HTMLSelectElement>(null)
   const pImageRef = useRef<HTMLInputElement>(null)
   const pDescRef = useRef<HTMLInputElement>(null)
   const pStockRef = useRef<HTMLInputElement>(null)
   const pFileRef = useRef<HTMLInputElement>(null)
+  const pRestaurantRef = useRef<HTMLSelectElement>(null)
+
+  // refs for Restaurants/Categories management
+  const rNameRef = useRef<HTMLInputElement>(null)
+  const rAddrRef = useRef<HTMLInputElement>(null)
+  const rLatRef = useRef<HTMLInputElement>(null)
+  const rLngRef = useRef<HTMLInputElement>(null)
+  const cNameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!ready) return
@@ -101,6 +112,14 @@ export default function Admin() {
     const r = await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products`)
     setProducts(r.data || [])
   }
+  async function refreshRestaurants() {
+    const r = await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants`)
+    setRestaurants(r.data || [])
+  }
+  async function refreshCategories() {
+    const r = await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/categories`)
+    setCategories(r.data || [])
+  }
   async function refreshUsers() {
     const r = await axios.get(`${USER_BASE.replace(/\/$/, '')}/users`, { headers })
     setUsers(r.data || [])
@@ -110,7 +129,7 @@ export default function Admin() {
     setOrders(r.data || [])
   }
 
-  useEffect(() => { refreshProducts() }, [])
+  useEffect(() => { refreshProducts(); refreshRestaurants(); refreshCategories() }, [])
   useEffect(() => { if (role==='admin') refreshUsers() }, [role])
   useEffect(() => { refreshOrders() }, [])
 
@@ -150,10 +169,11 @@ export default function Admin() {
   async function addProduct() {
     const name = pNameRef.current?.value?.trim() || ''
     const price = Number(pPriceRef.current?.value || 0)
-    const category = pCategoryRef.current?.value?.trim() || ''
+    const category = pCategoryRef.current?.value || ''
     let imageUrl = pImageRef.current?.value?.trim() || ''
     const description = pDescRef.current?.value?.trim() || ''
     const stock = Number(pStockRef.current?.value || 100)
+    const restaurantId = pRestaurantRef.current?.value || ''
     if (!name || !price) { alert('Vui lòng nhập tên và giá'); return }
     try {
       const file = pFileRef.current?.files && pFileRef.current.files[0]
@@ -162,7 +182,7 @@ export default function Admin() {
         if (path) imageUrl = path
       }
     } catch {}
-    await axios.post(`${PRODUCT_BASE.replace(/\/$/, '')}/products`, { name, price, stock, imageUrl, description, category })
+    await axios.post(`${PRODUCT_BASE.replace(/\/$/, '')}/products`, { name, price, stock, imageUrl, description, category, restaurantId })
     await refreshProducts()
     if (pNameRef.current) pNameRef.current.value = ''
     if (pPriceRef.current) pPriceRef.current.value = ''
@@ -171,6 +191,7 @@ export default function Admin() {
     if (pDescRef.current) pDescRef.current.value = ''
     if (pStockRef.current) pStockRef.current.value = ''
     if (pFileRef.current) pFileRef.current.value = ''
+    if (pRestaurantRef.current) pRestaurantRef.current.value = ''
   }
 
   async function updateProduct(p: any) {
@@ -182,6 +203,10 @@ export default function Admin() {
       description: val(`p-desc-${p.id}`),
       stock: Number(val(`p-stock-${p.id}`) || p.stock),
     }
+    try {
+      const el = document.getElementById(`p-rest-${p.id}`) as HTMLSelectElement | null
+      if (el) payload.restaurantId = el.value || null
+    } catch {}
     try {
       const f = fileOf(`p-file-${p.id}`)
       if (f) {
@@ -238,6 +263,8 @@ export default function Admin() {
             <button className={`chip${tab==='products'?' active':''}`} onClick={() => setTab('products')}>Sản phẩm</button>
             <button className={`chip${tab==='users'?' active':''}`} onClick={() => setTab('users')}>Người dùng</button>
             <button className={`chip${tab==='orders'?' active':''}`} onClick={() => setTab('orders')}>Đơn hàng</button>
+            <button className={`chip${tab==='restaurants'?' active':''}`} onClick={() => setTab('restaurants')}>Nhà hàng</button>
+            <button className={`chip${tab==='categories'?' active':''}`} onClick={() => setTab('categories')}>Danh mục</button>
           </div>
         </div>
       </div>
@@ -247,7 +274,18 @@ export default function Admin() {
           <Section title="Thêm sản phẩm">
             <div className="form-row"><label>Tên</label><input className="input" placeholder="Tên món" ref={pNameRef} autoComplete="off" /></div>
             <div className="form-row"><label>Giá</label><input className="input" placeholder="Giá" inputMode="decimal" ref={pPriceRef} autoComplete="off" /></div>
-            <div className="form-row"><label>Danh mục</label><input className="input" placeholder="Danh mục" ref={pCategoryRef} autoComplete="off" /></div>
+            <div className="form-row"><label>Danh mục</label>
+              <select ref={pCategoryRef} defaultValue="">
+                <option value="">-- chọn danh mục --</option>
+                {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+              </select>
+            </div>
+            <div className="form-row"><label>Nhà hàng</label>
+              <select ref={pRestaurantRef} defaultValue="">
+                <option value="">-- chọn nhà hàng --</option>
+                {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </div>
             <div className="form-row"><label>Ảnh (URL hoặc /images/...)</label><input className="input" placeholder="/images/pho-bo.jpg" ref={pImageRef} autoComplete="off" /></div>
             <div className="form-row"><label>Tải ảnh</label><input type="file" accept="image/*" ref={pFileRef} /></div>
             <div className="form-row"><label>Mô tả</label><input className="input" placeholder="Mô tả chi tiết" ref={pDescRef} autoComplete="off" /></div>
@@ -263,6 +301,7 @@ export default function Admin() {
                     <th align="left">Tên</th>
                     <th align="left">Giá</th>
                     <th align="left">Danh mục</th>
+                    <th align="left">Nhà hàng</th>
                     <th align="left">Tồn</th>
                     <th align="left">Ảnh</th>
                     <th align="left">Mô tả</th>
@@ -276,6 +315,12 @@ export default function Admin() {
                         <td><input id={`p-name-${p.id}`} className="input" defaultValue={p.name} /></td>
                         <td><input id={`p-price-${p.id}`} className="input" defaultValue={String(p.price)} /></td>
                         <td><input id={`p-category-${p.id}`} className="input" defaultValue={p.category || ''} /></td>
+                        <td>
+                          <select id={`p-rest-${p.id}`} defaultValue={p.restaurantId || ''}>
+                            <option value="">--</option>
+                            {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                          </select>
+                        </td>
                         <td><input id={`p-stock-${p.id}`} className="input" defaultValue={String(p.stock)} /></td>
                         <td>
                           <input id={`p-image-${p.id}`} className="input" defaultValue={p.imageUrl || ''} />
@@ -361,11 +406,10 @@ export default function Admin() {
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span className="badge">{o.status || ''}</span>
-                        <select value={o.status || ''} onChange={e => updateOrderStatus(o, e.target.value)}>
-                          <option>Bắt đầu giao</option>
-                          <option>Đang giao</option>
-                          <option>Đã giao đồ ăn</option>
-                        </select>
+                        <button className="btn small" style={{ background: (armed[o.id] ? 'var(--accent)' : ''), color: (armed[o.id] ? '#fff' : '') }} onClick={async () => { const next = !armed[o.id]; if (next) { try { await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/orders/${o.id}/drone/arm`); } catch {} } setArmed(a => ({ ...a, [o.id]: next })); }} title="Bật/tắt drone">🛸</button>
+                        <button className="btn small primary" disabled={!armed[o.id]} onClick={async () => { await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/orders/${o.id}/drone/start`); }}>Bắt đầu drone</button>
+                        <button className="btn small" onClick={() => updateOrderStatus(o, 'Đã giao đồ ăn tới nhà')}>Xác nhận đã giao</button>
+                        <a className="btn small ghost" href={`#/track/${o.id}`}>Theo dõi</a>
                       </div>
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
@@ -377,6 +421,81 @@ export default function Admin() {
             </table>
           </div>
         </Section>
+      )}
+
+      {tab==='restaurants' && (
+        <>
+          <Section title="Thêm nhà hàng">
+            <div className="form-row"><label>Tên</label><input className="input" placeholder="Tên nhà hàng" ref={rNameRef} /></div>
+            <div className="form-row"><label>Địa chỉ</label><input className="input" placeholder="Địa chỉ" ref={rAddrRef} /></div>
+            <div className="form-row" style={{ display:'flex', gap:8 }}>
+              <div style={{ flex:1 }}><label>Lat</label><input className="input" placeholder="10.77" ref={rLatRef} /></div>
+              <div style={{ flex:1 }}><label>Lng</label><input className="input" placeholder="106.69" ref={rLngRef} /></div>
+            </div>
+            <button className="btn primary" onClick={async () => { const name = rNameRef.current?.value || ''; if (!name) { alert('Nhập tên'); return } const address = rAddrRef.current?.value || ''; const lat = Number(rLatRef.current?.value || ''); const lng = Number(rLngRef.current?.value || ''); await axios.post(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants`, { name, address, lat: isNaN(lat)? undefined: lat, lng: isNaN(lng)? undefined: lng }); await refreshRestaurants(); if (rNameRef.current) rNameRef.current.value=''; if (rAddrRef.current) rAddrRef.current.value=''; if (rLatRef.current) rLatRef.current.value=''; if (rLngRef.current) rLngRef.current.value=''; }}>Thêm</button>
+          </Section>
+          <Section title="Gán món vào nhà hàng">
+            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <button className="btn" onClick={async () => {
+                try {
+                  await axios.post(`${PRODUCT_BASE.replace(/\/$/, '')}/assign-restaurants`)
+                  await refreshProducts()
+                  alert('Đã gán tất cả món vào các nhà hàng (vòng tròn).')
+                } catch (e: any) {
+                  alert('Thất bại: ' + (e?.response?.data?.error || e?.message))
+                }
+              }}>Gán tất cả món</button>
+              <div className="loading" style={{ padding:0 }}>Yêu cầu đã có nhà hàng được tạo/seed trước đó.</div>
+            </div>
+          </Section>
+          <Section title="Danh sách nhà hàng">
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                <thead><tr><th align="left">Tên</th><th align="left">Địa chỉ</th><th align="left">Toạ độ</th><th align="left">Hành động</th></tr></thead>
+                <tbody>
+                  {restaurants.map(r => (
+                    <tr key={r.id} style={{ borderTop:'1px solid var(--border)' }}>
+                      <td><input id={`r-name-${r.id}`} className="input" defaultValue={r.name} /></td>
+                      <td><input id={`r-addr-${r.id}`} className="input" defaultValue={r.address || ''} /></td>
+                      <td style={{ display:'flex', gap:6 }}>
+                        <input id={`r-lat-${r.id}`} className="input" defaultValue={String(r.lat ?? '')} />
+                        <input id={`r-lng-${r.id}`} className="input" defaultValue={String(r.lng ?? '')} />
+                      </td>
+                      <td>
+                        <button className="btn small" onClick={async () => { const payload: any = { name: val(`r-name-${r.id}`), address: val(`r-addr-${r.id}`) }; const latV = parseFloat(val(`r-lat-${r.id}`)); if (!isNaN(latV)) payload.lat = latV; const lngV = parseFloat(val(`r-lng-${r.id}`)); if (!isNaN(lngV)) payload.lng = lngV; await axios.put(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${r.id}`, payload); await refreshRestaurants(); }}>Lưu</button>
+                        <button className="btn small ghost" style={{ marginLeft:6 }} onClick={async () => { if (!confirm('Xoá nhà hàng này?')) return; await axios.delete(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${r.id}`); await refreshRestaurants(); }}>Xoá</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+        </>
+      )}
+
+      {tab==='categories' && (
+        <>
+          <Section title="Thêm danh mục">
+            <div className="form-row"><label>Tên danh mục</label><input className="input" placeholder="Ví dụ: Vietnamese" ref={cNameRef} /></div>
+            <button className="btn primary" onClick={async () => { const name = cNameRef.current?.value?.trim() || ''; if (!name) { alert('Nhập tên danh mục'); return } await axios.post(`${PRODUCT_BASE.replace(/\/$/, '')}/categories`, { name }); await refreshCategories(); if (cNameRef.current) cNameRef.current.value=''; }}>Thêm</button>
+          </Section>
+          <Section title="Danh sách danh mục">
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                <thead><tr><th align="left">Tên</th><th align="left">Hành động</th></tr></thead>
+                <tbody>
+                  {categories.map(c => (
+                    <tr key={c.id} style={{ borderTop:'1px solid var(--border)' }}>
+                      <td>{c.name}</td>
+                      <td><button className="btn small ghost" onClick={async () => { if(!confirm('Xoá danh mục này?')) return; await axios.delete(`${PRODUCT_BASE.replace(/\/$/, '')}/categories/${c.id}`); await refreshCategories(); }}>Xoá</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+        </>
       )}
     </div>
   )

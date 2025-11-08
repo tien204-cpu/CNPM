@@ -44,6 +44,70 @@ app.post('/upload', upload.single('file'), async (req: Request, res: Response) =
   }
 });
 
+// --- Restaurant & Category management ---
+// Restaurants
+app.get('/restaurants', async (req: Request, res: Response) => {
+  try {
+    const list = await prisma.restaurant.findMany();
+    res.json(list);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+app.get('/restaurants/:id', async (req: Request, res: Response) => {
+  try {
+    const r = await prisma.restaurant.findUnique({ where: { id: req.params.id } });
+    if (!r) return res.status(404).json({ error: 'not found' });
+    res.json(r);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+app.post('/restaurants', async (req: Request, res: Response) => {
+  try {
+    const { name, address, lat, lng } = req.body as any;
+    const r = await prisma.restaurant.create({ data: { name, address: address || null, lat: lat!=null? Number(lat) : null, lng: lng!=null? Number(lng) : null } as any });
+    res.json(r);
+  } catch (e: any) { res.status(500).json({ error: e?.message || String(e) }); }
+});
+app.put('/restaurants/:id', async (req: Request, res: Response) => {
+  try {
+    const { name, address, lat, lng } = req.body as any;
+    const data: any = {};
+    if (name !== undefined) data.name = name;
+    if (address !== undefined) data.address = address;
+    if (lat !== undefined) data.lat = Number(lat);
+    if (lng !== undefined) data.lng = Number(lng);
+    const r = await prisma.restaurant.update({ where: { id: req.params.id }, data });
+    res.json(r);
+  } catch (e: any) { res.status(500).json({ error: e?.message || String(e) }); }
+});
+app.delete('/restaurants/:id', async (req: Request, res: Response) => {
+  try {
+    await prisma.restaurant.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e?.message || String(e) }); }
+});
+
+// Categories (reference list for picking names)
+app.get('/categories', async (req: Request, res: Response) => {
+  try {
+    const list = await prisma.category.findMany();
+    res.json(list);
+  } catch (e: any) { res.status(500).json({ error: e?.message || String(e) }); }
+});
+app.post('/categories', async (req: Request, res: Response) => {
+  try {
+    const { name } = req.body as any;
+    const c = await prisma.category.create({ data: { name } });
+    res.json(c);
+  } catch (e: any) { res.status(500).json({ error: e?.message || String(e) }); }
+});
+app.delete('/categories/:id', async (req: Request, res: Response) => {
+  try { await prisma.category.delete({ where: { id: req.params.id } }); res.json({ ok: true }); }
+  catch (e: any) { res.status(500).json({ error: e?.message || String(e) }); }
+});
+
 // request logging middleware: log every incoming request body/headers/path
 app.use((req: Request, res: Response, next: NextFunction) => {
   try {
@@ -138,6 +202,92 @@ app.post('/seed', async (req: Request, res: Response) => {
   }
 });
 
+// seed reference data for restaurants & categories in Saigon
+app.post('/seed-refs', async (req: Request, res: Response) => {
+  try {
+    const categories = [
+      'Vietnamese','Pizza','Burger','Sushi','Pasta','Salad','Mexican','Japanese','Chicken','Steak','Drinks','Dessert','Sides'
+    ];
+    // upsert categories
+    for (const name of categories) {
+      try {
+        await prisma.category.upsert({ where: { name }, update: {}, create: { name } });
+      } catch {}
+    }
+    // seed some Saigon restaurants with precise addresses/coords
+    const saigon = [
+      { name: 'Nhà hàng Bến Thành', address: '1 Lê Lợi, Bến Nghé, Quận 1, TP.HCM', lat: 10.77248, lng: 106.69806 },
+      { name: 'Quán Ăn Phố Tây', address: '185 Bùi Viện, Phạm Ngũ Lão, Quận 1, TP.HCM', lat: 10.76855, lng: 106.69320 },
+      { name: 'FoodFast Sài Gòn', address: '2 Võ Văn Tần, Phường 6, Quận 3, TP.HCM', lat: 10.77964, lng: 106.69200 }
+    ];
+    const out: any[] = []
+    for (const r of saigon) {
+      const found = await prisma.restaurant.findFirst({ where: { name: r.name } })
+      if (found) {
+        const up = await prisma.restaurant.update({ where: { id: found.id }, data: { address: r.address, lat: r.lat, lng: r.lng } as any })
+        out.push(up)
+      } else {
+        const c = await prisma.restaurant.create({ data: r as any })
+        out.push(c)
+      }
+    }
+    res.json({ ok: true, categories, restaurants: out });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+// Assign all existing products to restaurants (round-robin). If no restaurants, return 400.
+app.post('/assign-restaurants', async (req: Request, res: Response) => {
+  try {
+    const restaurants = await prisma.restaurant.findMany();
+    if (!restaurants.length) return res.status(400).json({ error: 'no restaurants' });
+    const prods = await prisma.product.findMany();
+    let i = 0;
+    for (const p of prods) {
+      const r = restaurants[i % restaurants.length];
+      i++;
+      await prisma.product.update({ where: { id: p.id }, data: { restaurantId: r.id } });
+    }
+    res.json({ ok: true, assigned: prods.length, restaurants: restaurants.length });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+// Assign products to 3 restaurants by category: Vietnamese, Asia-Europe, Others
+app.post('/assign-by-category', async (req: Request, res: Response) => {
+  function categoryOfName(name: string) {
+    const n = (name || '').toLowerCase();
+    if (/phở|pho|bún|bun|bánh mì|banh mi|cơm|com|hủ tiếu|hu tieu|bún bò|bun bo|bún chả|bun cha|bánh xèo|banh xeo|mì quảng|mi quang|bò kho|bo kho|gỏi cuốn|goi cuon/.test(n)) return 'Vietnamese';
+    if (/pizza|spaghetti|pasta|lasagna|burger|hamburger|cheeseburger|sushi|nigiri|maki|ramen|steak|salad|caesar|greek|chicken/.test(n)) return 'AsiaEurope';
+    if (/taco|burrito|quesadilla/.test(n)) return 'Mexican';
+    if (/coke|soda|drink|tea|milk|juice|cam|orange/.test(n)) return 'Drinks';
+    if (/chè|che|dessert|sweet/.test(n)) return 'Dessert';
+    return 'Other';
+  }
+  try {
+    const restaurants = await prisma.restaurant.findMany();
+    if (!restaurants.length) return res.status(400).json({ error: 'no restaurants' });
+    const rVN = restaurants[0];
+    const rAE = restaurants[1] || restaurants[0];
+    const rOT = restaurants[2] || restaurants[restaurants.length - 1];
+    const prods = await prisma.product.findMany();
+    let counts = { vn: 0, ae: 0, other: 0 };
+    for (const p of prods) {
+      const cat = categoryOfName(p.name);
+      let rid = rOT.id; // default others
+      if (cat === 'Vietnamese') { rid = rVN.id; counts.vn++; }
+      else if (cat === 'AsiaEurope') { rid = rAE.id; counts.ae++; }
+      else { counts.other++; }
+      await prisma.product.update({ where: { id: p.id }, data: { restaurantId: rid } });
+    }
+    res.json({ ok: true, restaurants: { vn: rVN.name, ae: rAE.name, other: rOT.name }, counts });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
 app.get('/products', async (req: Request, res: Response) => {
   try {
     const all = await prisma.product.findMany();
@@ -161,7 +311,7 @@ app.get('/products/:id', async (req: Request, res: Response) => {
 
 app.post('/products', async (req: Request, res: Response) => {
   try {
-    const { name, price, stock, imageUrl, description, category } = req.body as any;
+    const { name, price, stock, imageUrl, description, category, restaurantId } = req.body as any;
     const data: any = {
       name,
       price: Number(price),
@@ -169,6 +319,7 @@ app.post('/products', async (req: Request, res: Response) => {
       imageUrl: imageUrl || null,
       description: description || null,
       category: category || null,
+      restaurantId: restaurantId || null,
     };
     const p = await prisma.product.create({ data });
     res.json(p);
@@ -181,7 +332,7 @@ app.post('/products', async (req: Request, res: Response) => {
 app.put('/products/:id', async (req: Request, res: Response) => {
   const id = req.params.id
   try {
-    const { name, price, stock, imageUrl, description, category } = req.body as any;
+    const { name, price, stock, imageUrl, description, category, restaurantId } = req.body as any;
     const data: any = {}
     if (name !== undefined) data.name = name
     if (price !== undefined) data.price = Number(price)
@@ -189,6 +340,7 @@ app.put('/products/:id', async (req: Request, res: Response) => {
     if (imageUrl !== undefined) data.imageUrl = imageUrl
     if (description !== undefined) data.description = description
     if (category !== undefined) data.category = category
+    if (restaurantId !== undefined) data.restaurantId = restaurantId || null
     const p = await prisma.product.update({ where: { id }, data })
     res.json(p)
   } catch (e: any) {
