@@ -3,11 +3,12 @@ import React, { useEffect, useState, useRef } from 'react'
 import axios from 'axios'
 import './App.css'
 import { getMappedImage } from './image-map'
-import Admin from './Admin'
+import Admin, { AdminProductCreate } from './Admin'
 
 const PRODUCT_BASE = import.meta.env.VITE_PRODUCT_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3002'
 const USER_BASE = import.meta.env.VITE_USER_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3001'
 const ORDER_BASE = import.meta.env.VITE_ORDER_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3003'
+const PAYMENT_BASE = (import.meta as any).env.VITE_PAYMENT_BASE || (import.meta as any).env.VITE_API_BASE || 'http://localhost:3004'
 
 type Product = { id: string; name: string; price: number; stock?: number; imageUrl?: string; description?: string }
 
@@ -56,6 +57,7 @@ export default function App() {
   const [authName, setAuthName] = useState('')
   const [authPhone, setAuthPhone] = useState('')
   const [authAddress, setAuthAddress] = useState('')
+  const [agreeTerms, setAgreeTerms] = useState<boolean>(false)
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('Tất cả')
   const [minPrice, setMinPrice] = useState<string>('')
@@ -268,6 +270,7 @@ export default function App() {
       const address = addressRef.current?.value || authAddress
       if (authMode === 'register') {
         if (!email || !pass) { setAuthError('Vui lòng nhập email và mật khẩu'); return }
+        if (!agreeTerms) { setAuthError('Bạn phải đồng ý với các điều khoản'); return }
         await axios.post(`${USER_BASE.replace(/\/$/, '')}/register`, { email, password: pass, name })
       }
       const login = await axios.post(`${USER_BASE.replace(/\/$/, '')}/login`, { email, password: pass })
@@ -325,6 +328,16 @@ export default function App() {
       const order = res.data
       setLastOrder(order)
       setCart([])
+      if (paymentMethod === 'VNPay') {
+        try {
+          const pr = await axios.post(`${PAYMENT_BASE.replace(/\/$/, '')}/vnpay/create`, { amount: Number(order?.total || 0), orderId: order?.id })
+          const url = pr?.data?.url
+          if (url) { window.location.href = url; return }
+          else { alert('Không tạo được liên kết VNPay, chuyển sang hoá đơn'); }
+        } catch (e: any) {
+          alert('Tạo thanh toán VNPay thất bại: ' + (e?.response?.data?.error || e?.message || ''))
+        }
+      }
       go(`/bill/${order?.id || ''}`)
     } catch (e: any) { alert('Đặt hàng thất bại: ' + (e.response?.data?.error || e.message)) }
   }
@@ -434,6 +447,10 @@ export default function App() {
               <div className="form-row">
                 <label>Địa chỉ</label>
                 <input className="input" placeholder="địa chỉ" name="street-address" autoComplete="street-address" defaultValue={authAddress} ref={addressRef} />
+              </div>
+              <div className="form-row" style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <input id="agree-terms" type="checkbox" checked={agreeTerms} onChange={e => setAgreeTerms(e.target.checked)} />
+                <label htmlFor="agree-terms">Tôi đồng ý với các điều khoản</label>
               </div>
             </>
           )}
@@ -806,8 +823,8 @@ export default function App() {
               <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input type="radio" name="payment" checked={paymentMethod==='COD'} onChange={() => setPaymentMethod('COD')} /> COD (Thanh toán khi nhận hàng)
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: 0.5 }}>
-                <input type="radio" name="payment" disabled checked={paymentMethod==='VNPay'} onChange={() => {}} /> VNPay (tạm thời chưa hỗ trợ)
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="radio" name="payment" checked={paymentMethod==='VNPay'} onChange={() => setPaymentMethod('VNPay')} /> VNPay
               </label>
             </div>
           </div>
@@ -906,6 +923,8 @@ export default function App() {
             <CheckoutPage />
           ) : route === '/admin' ? (
             <Admin />
+          ) : route === '/admin/products/new' ? (
+            <AdminProductCreate />
           ) : (
             <ProductList />
           )}

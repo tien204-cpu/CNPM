@@ -73,6 +73,77 @@ function Section({ title, children }: { title: string; children: any }) {
   )
 }
 
+export function AdminProductCreate() {
+  const { token, role, ready } = useAuth()
+  const headers = useMemo(() => token ? { Authorization: `Bearer ${token}` } : {}, [token])
+  const [restaurants, setRestaurants] = useState<any[]>([])
+  const [categories, setCategories] = useState<any[]>([])
+  const nameRef = useRef<HTMLInputElement>(null)
+  const priceRef = useRef<HTMLInputElement>(null)
+  const catRef = useRef<HTMLSelectElement>(null)
+  const restRef = useRef<HTMLSelectElement>(null)
+  const imgRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const descRef = useRef<HTMLInputElement>(null)
+  const stockRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants`).then(r => setRestaurants(r.data||[])).catch(() => setRestaurants([]))
+    axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/categories`).then(r => setCategories(r.data||[])).catch(() => setCategories([]))
+  }, [])
+  useEffect(() => {
+    if (!ready) return
+    if (role !== 'admin') { window.location.hash = '/' }
+  }, [ready, role])
+  async function submit() {
+    const name = nameRef.current?.value?.trim() || ''
+    const price = Number(priceRef.current?.value || 0)
+    const category = catRef.current?.value || ''
+    let imageUrl = imgRef.current?.value?.trim() || ''
+    const description = descRef.current?.value?.trim() || ''
+    const stock = Number(stockRef.current?.value || 100)
+    const restaurantId = restRef.current?.value || ''
+    if (!name || !price) { alert('Vui lòng nhập tên và giá'); return }
+    try {
+      const f = fileRef.current?.files && fileRef.current.files[0]
+      if (f) {
+        const up = await uploadImage(f)
+        if (up) imageUrl = up
+      }
+    } catch {}
+    await axios.post(`${PRODUCT_BASE.replace(/\/$/, '')}/products`, { name, price, stock, imageUrl, description, category, restaurantId }, { headers })
+    window.location.hash = '#/admin'
+  }
+  return (
+    <div className="page">
+      <h2>Thêm sản phẩm</h2>
+      <div className="card">
+        <div className="form-row"><label>Tên</label><input className="input" placeholder="Tên món" ref={nameRef} autoComplete="off" /></div>
+        <div className="form-row"><label>Giá</label><input className="input" placeholder="Giá" inputMode="decimal" ref={priceRef} autoComplete="off" /></div>
+        <div className="form-row"><label>Danh mục</label>
+          <select ref={catRef} defaultValue="">
+            <option value="">-- chọn danh mục --</option>
+            {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+          </select>
+        </div>
+        <div className="form-row"><label>Nhà hàng</label>
+          <select ref={restRef} defaultValue="">
+            <option value="">-- chọn nhà hàng --</option>
+            {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        </div>
+        <div className="form-row"><label>Ảnh (URL hoặc /images/...)</label><input className="input" placeholder="/images/pho-bo.jpg" ref={imgRef} autoComplete="off" /></div>
+        <div className="form-row"><label>Tải ảnh</label><input type="file" accept="image/*" ref={fileRef} /></div>
+        <div className="form-row"><label>Mô tả</label><input className="input" placeholder="Mô tả chi tiết" ref={descRef} autoComplete="off" /></div>
+        <div className="form-row"><label>Tồn kho</label><input className="input" placeholder="100" inputMode="numeric" ref={stockRef} autoComplete="off" /></div>
+        <div style={{ display:'flex', gap:8, marginTop: 8 }}>
+          <button className="btn" onClick={() => { window.location.hash = '#/admin' }}>Quay lại</button>
+          <button className="btn primary" onClick={submit}>Lưu</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Admin() {
   const { token, role, ready } = useAuth()
   const headers = useMemo(() => token ? { Authorization: `Bearer ${token}` } : {}, [token])
@@ -271,27 +342,9 @@ export default function Admin() {
 
       {tab==='products' && (
         <>
-          <Section title="Thêm sản phẩm">
-            <div className="form-row"><label>Tên</label><input className="input" placeholder="Tên món" ref={pNameRef} autoComplete="off" /></div>
-            <div className="form-row"><label>Giá</label><input className="input" placeholder="Giá" inputMode="decimal" ref={pPriceRef} autoComplete="off" /></div>
-            <div className="form-row"><label>Danh mục</label>
-              <select ref={pCategoryRef} defaultValue="">
-                <option value="">-- chọn danh mục --</option>
-                {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-              </select>
-            </div>
-            <div className="form-row"><label>Nhà hàng</label>
-              <select ref={pRestaurantRef} defaultValue="">
-                <option value="">-- chọn nhà hàng --</option>
-                {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-            </div>
-            <div className="form-row"><label>Ảnh (URL hoặc /images/...)</label><input className="input" placeholder="/images/pho-bo.jpg" ref={pImageRef} autoComplete="off" /></div>
-            <div className="form-row"><label>Tải ảnh</label><input type="file" accept="image/*" ref={pFileRef} /></div>
-            <div className="form-row"><label>Mô tả</label><input className="input" placeholder="Mô tả chi tiết" ref={pDescRef} autoComplete="off" /></div>
-            <div className="form-row"><label>Tồn kho</label><input className="input" placeholder="100" inputMode="numeric" ref={pStockRef} autoComplete="off" /></div>
-            <button className="btn primary" onClick={addProduct}>Thêm</button>
-          </Section>
+          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom: 8 }}>
+            <a className="btn primary" href="#/admin/products/new">Thêm</a>
+          </div>
 
           <Section title="Danh sách sản phẩm">
             <div style={{ overflowX: 'auto' }}>

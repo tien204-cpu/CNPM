@@ -150,9 +150,12 @@ app.post('/orders', async (req: any, res: any) => {
             appendLog({ action: 'reserve-success', productId: it.productId, qty: it.qty, resp: decResp?.data });
           }
 
-        // call payment
-        const pay: any = await axiosWithRetry('post', `${PAYMENT_URL}/pay`, { amount: total });
-        appendLog({ action: 'payment-attempt', total, resp: pay?.data, status: pay?.status });
+        const paymentMethod = (payment && payment.method) || 'COD';
+        let pay: any = { data: { success: true } };
+        if (paymentMethod !== 'VNPay') {
+          pay = await axiosWithRetry('post', `${PAYMENT_URL}/pay`, { amount: total });
+        }
+        appendLog({ action: 'payment-attempt', total, resp: pay?.data, status: pay?.status, method: paymentMethod });
         if (!pay || !pay.data || !pay.data.success) {
           console.warn('payment failed or returned falsy success', pay?.status, pay?.data);
           // payment failed -> restore stock
@@ -174,7 +177,6 @@ app.post('/orders', async (req: any, res: any) => {
 
       // Create order in our DB with shipping/payment/userEmail, and store approximate shipping lat/lng
       let order;
-      const paymentMethod = (payment && payment.method) || 'COD';
       const geo = pseudoGeocode(shipping?.address || 'Saigon');
       order = await prisma.order.create({
         data: {
