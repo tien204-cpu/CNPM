@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react'
 
 import axios from 'axios'
-import './App.css'
+import '../assets/App.css'
 import { getMappedImage } from './image-map'
-import Admin, { AdminProductCreate } from './Admin'
+import Admin, { AdminProductCreate } from '../admin/Admin'
 
 const PRODUCT_BASE = import.meta.env.VITE_PRODUCT_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3002'
 const USER_BASE = import.meta.env.VITE_USER_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3001'
@@ -58,6 +58,7 @@ export default function App() {
   const [authPhone, setAuthPhone] = useState('')
   const [authAddress, setAuthAddress] = useState('')
   const [agreeTerms, setAgreeTerms] = useState<boolean>(false)
+  const [forgotMode, setForgotMode] = useState<boolean>(false)
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('Tất cả')
   const [minPrice, setMinPrice] = useState<string>('')
@@ -74,6 +75,9 @@ export default function App() {
   const [shipPhone, setShipPhone] = useState<string>('')
   const [shipAddress, setShipAddress] = useState<string>('')
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'VNPay'>('COD')
+  const [vnpBank, setVnpBank] = useState<string>('NCB')
+  const [vnpLocale, setVnpLocale] = useState<string>('vn')
+  const [vnpDesc, setVnpDesc] = useState<string>('')
   const [lastOrder, setLastOrder] = useState<any>(null)
   const [showAll, setShowAll] = useState<boolean>(false)
   const [recoSeed, setRecoSeed] = useState<number>(() => {
@@ -93,6 +97,8 @@ export default function App() {
   const shipNameRef = useRef<HTMLInputElement>(null)
   const shipPhoneRef = useRef<HTMLInputElement>(null)
   const shipAddressRef = useRef<HTMLInputElement>(null)
+  const newPassRef = useRef<HTMLInputElement>(null)
+  const confirmPassRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
     const onHash = () => setRoute(window.location.hash.replace('#', '') || '/')
     window.addEventListener('hashchange', onHash)
@@ -302,6 +308,23 @@ export default function App() {
     }
   }
 
+  async function resetPassword() {
+    setAuthError(null)
+    try {
+      const email = emailRef.current?.value || authEmail
+      const np = newPassRef.current?.value || ''
+      const cf = confirmPassRef.current?.value || ''
+      if (!email || !np || !cf) { setAuthError('Vui lòng nhập đầy đủ'); return }
+      if (np !== cf) { setAuthError('Mật khẩu mới không khớp'); return }
+      await axios.post(`${USER_BASE.replace(/\/$/, '')}/reset`, { email, password: np })
+      setForgotMode(false)
+      setAuthPassword('')
+      alert('Đặt lại mật khẩu thành công. Vui lòng đăng nhập.')
+    } catch (e: any) {
+      setAuthError(String(e?.response?.data?.error || e.message || 'Đặt lại mật khẩu thất bại'))
+    }
+  }
+
   function logout() {
     setUser(null)
     setCart([])
@@ -330,7 +353,13 @@ export default function App() {
       setCart([])
       if (paymentMethod === 'VNPay') {
         try {
-          const pr = await axios.post(`${PAYMENT_BASE.replace(/\/$/, '')}/vnpay/create`, { amount: Number(order?.total || 0), orderId: order?.id })
+          const pr = await axios.post(`${PAYMENT_BASE.replace(/\/$/, '')}/vnpay/create`, {
+            amount: Number(order?.total || 0),
+            orderId: order?.id,
+            bankCode: vnpBank,
+            language: vnpLocale,
+            description: (vnpDesc && vnpDesc.trim()) ? vnpDesc.trim() : `Thanh toan don hang ${order?.id || ''}`
+          })
           const url = pr?.data?.url
           if (url) { window.location.href = url; return }
           else { alert('Không tạo được liên kết VNPay, chuyển sang hoá đơn'); }
@@ -430,10 +459,12 @@ export default function App() {
         <div className="card">
           {authError && <div className="error">{authError}</div>}
           {/* bỏ lựa chọn chế độ, dùng đường dẫn /login hoặc /register */}
-          <div className="form-row">
-            <label>Email</label>
-            <input className="input" placeholder="email" type="email" name="email" inputMode="email" autoComplete={authMode === 'login' ? 'username' : 'email'} defaultValue={authEmail} ref={emailRef} />
-          </div>
+          {!(authMode === 'login' && forgotMode) && (
+            <div className="form-row">
+              <label>Email</label>
+              <input className="input" placeholder="email" type="email" name="email" inputMode="email" autoComplete={authMode === 'login' ? 'username' : 'email'} defaultValue={authEmail} ref={emailRef} />
+            </div>
+          )}
           {authMode === 'register' && (
             <>
               <div className="form-row">
@@ -448,19 +479,46 @@ export default function App() {
                 <label>Địa chỉ</label>
                 <input className="input" placeholder="địa chỉ" name="street-address" autoComplete="street-address" defaultValue={authAddress} ref={addressRef} />
               </div>
-              <div className="form-row" style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <input id="agree-terms" type="checkbox" checked={agreeTerms} onChange={e => setAgreeTerms(e.target.checked)} />
-                <label htmlFor="agree-terms">Tôi đồng ý với các điều khoản</label>
+            </>
+          )}
+          {!(authMode === 'login' && forgotMode) && (
+            <div className="form-row">
+              <label>Mật khẩu</label>
+              <input className="input" placeholder="mật khẩu" type="password" name={authMode === 'login' ? 'current-password' : 'new-password'} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} defaultValue={authPassword} ref={passwordRef} />
+            </div>
+          )}
+          {authMode === 'login' && !forgotMode && (
+            <div style={{ marginBottom: 8 }}>
+              <button className="btn ghost" onClick={() => setForgotMode(true)}>Quên mật khẩu?</button>
+            </div>
+          )}
+          {authMode === 'login' && forgotMode && (
+            <>
+              <div className="form-row">
+                <label>Mật khẩu mới</label>
+                <input className="input" type="password" ref={newPassRef} placeholder="mật khẩu mới" />
+              </div>
+              <div className="form-row">
+                <label>Nhập lại mật khẩu mới</label>
+                <input className="input" type="password" ref={confirmPassRef} placeholder="nhập lại mật khẩu mới" />
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <button className="btn primary" onClick={resetPassword}>Đặt lại mật khẩu</button>
+                <button className="btn ghost" onClick={() => setForgotMode(false)}>Huỷ</button>
               </div>
             </>
           )}
-          <div className="form-row">
-            <label>Mật khẩu</label>
-            <input className="input" placeholder="mật khẩu" type="password" name={authMode === 'login' ? 'current-password' : 'new-password'} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} defaultValue={authPassword} ref={passwordRef} />
-          </div>
-          <div>
-            <button className="btn primary" onClick={submitAuth}>{authMode === 'login' ? 'Đăng nhập' : 'Đăng ký'}</button>
-          </div>
+          {authMode === 'register' && (
+            <div className="form-row" style={{ display:'flex', alignItems:'center', gap:8, justifyContent:'flex-start', alignSelf:'flex-start', textAlign:'left' }}>
+              <input id="agree-terms" type="checkbox" checked={agreeTerms} onChange={e => setAgreeTerms(e.target.checked)} />
+              <label htmlFor="agree-terms">Tôi đồng ý với các điều khoản</label>
+            </div>
+          )}
+          {!(authMode === 'login' && forgotMode) && (
+            <div>
+              <button className="btn primary" onClick={submitAuth} disabled={authMode === 'register' && !agreeTerms}>{authMode === 'login' ? 'Đăng nhập' : 'Đăng ký'}</button>
+            </div>
+          )}
           {authMode === 'register' && <div className="required-fields">* Các trường bắt buộc</div>}
         </div>
       </div>
@@ -828,6 +886,31 @@ export default function App() {
               </label>
             </div>
           </div>
+          {paymentMethod === 'VNPay' && (
+            <>
+              <div className="form-row">
+                <label>Ngân hàng</label>
+                <select value={vnpBank} onChange={e => setVnpBank(e.target.value)}>
+                  <option value="NCB">NCB</option>
+                  <option value="VCB">Vietcombank</option>
+                  <option value="AGRIBANK">Agribank</option>
+                  <option value="SACOMBANK">Sacombank</option>
+                  <option value="TECHCOMBANK">Techcombank</option>
+                </select>
+              </div>
+              <div className="form-row">
+                <label>Ngôn ngữ</label>
+                <select value={vnpLocale} onChange={e => setVnpLocale(e.target.value)}>
+                  <option value="vn">Tiếng Việt</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+              <div className="form-row">
+                <label>Nội dung đơn hàng</label>
+                <textarea rows={3} className="input" placeholder={`Thanh toan don hang ${lastOrder?.id || ''}`} value={vnpDesc} onChange={e => setVnpDesc(e.target.value)} />
+              </div>
+            </>
+          )}
           <div style={{ marginTop: 12 }}>
             <button className="btn primary" onClick={place} disabled={cart.length === 0}>Đặt hàng</button>
           </div>

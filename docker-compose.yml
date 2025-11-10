@@ -62,7 +62,9 @@ services:
       - "3004:3004"
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: others/Dockerfile
     ports:
       - "5173:80"
     environment:

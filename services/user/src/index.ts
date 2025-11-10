@@ -93,6 +93,16 @@ app.post('/login', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/reset', async (req: Request, res: Response) => {
+  const { email, password } = req.body as any;
+  if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return res.status(404).json({ error: 'not found' });
+  const hash = await bcrypt.hash(password, 10);
+  await prisma.user.update({ where: { email }, data: { password: hash } });
+  res.json({ ok: true });
+});
+
 app.get('/me', async (req: Request, res: Response) => {
   const auth = req.headers.authorization;
   if (!auth) return res.status(401).json({ error: 'no token' });

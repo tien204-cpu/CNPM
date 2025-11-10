@@ -458,7 +458,7 @@ export default function Admin() {
                     <td>${Number(o.total || 0).toFixed(2)}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="badge">{o.status || ''}</span>
+                        <span className="pill">{o.status || ''}</span>
                         <button className="btn small" style={{ background: (armed[o.id] ? 'var(--accent)' : ''), color: (armed[o.id] ? '#fff' : '') }} onClick={async () => { const next = !armed[o.id]; if (next) { try { await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/orders/${o.id}/drone/arm`); } catch {} } setArmed(a => ({ ...a, [o.id]: next })); }} title="Bật/tắt drone">🛸</button>
                         <button className="btn small primary" disabled={!armed[o.id]} onClick={async () => { await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/orders/${o.id}/drone/start`); }}>Bắt đầu drone</button>
                         <button className="btn small" onClick={() => updateOrderStatus(o, 'Đã giao đồ ăn tới nhà')}>Xác nhận đã giao</button>

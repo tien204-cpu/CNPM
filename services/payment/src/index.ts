@@ -59,8 +59,8 @@ app.post('/pay', (req: Request, res: Response) => {
 });
 
 app.post('/vnpay/create', (req: Request, res: Response) => {
-  const { amount, orderId } = req.body as any;
-  appendLog({ route: '/vnpay/create', req: { amount, orderId } });
+  const { amount, orderId, bankCode, language, description } = req.body as any;
+  appendLog({ route: '/vnpay/create', req: { amount, orderId, bankCode, language } });
   const amt = Number(amount);
   if (!orderId || !Number.isFinite(amt) || amt <= 0) {
     const out = { error: 'invalid amount or orderId' };
@@ -70,7 +70,10 @@ app.post('/vnpay/create', (req: Request, res: Response) => {
   const host = (req.headers['x-forwarded-host'] as string) || req.get('host') || `localhost:${PORT}`;
   const proto = (req.headers['x-forwarded-proto'] as string) || (req.protocol || 'http');
   const base = `${proto}://${host}`;
-  const url = `${base}/vnpay/demo?orderId=${encodeURIComponent(orderId)}&amount=${encodeURIComponent(String(amt))}`;
+  const bn = String(bankCode || 'NCB');
+  const lang = String(language || 'vn');
+  const desc = String(description || `Thanh toan don hang ${orderId || ''}`);
+  const url = `${base}/vnpay/demo?orderId=${encodeURIComponent(orderId)}&amount=${encodeURIComponent(String(amt))}&bankCode=${encodeURIComponent(bn)}&language=${encodeURIComponent(lang)}&desc=${encodeURIComponent(desc)}`;
   const out = { url };
   appendLog({ route: '/vnpay/create', res: out });
   res.json(out);
@@ -79,19 +82,71 @@ app.post('/vnpay/create', (req: Request, res: Response) => {
 app.get('/vnpay/demo', (req: Request, res: Response) => {
   const orderId = String(req.query.orderId || '');
   const amount = String(req.query.amount || '0');
-  const succeed = `/vnpay/return?orderId=${encodeURIComponent(orderId)}&vnp_ResponseCode=00`;
-  const failed = `/vnpay/return?orderId=${encodeURIComponent(orderId)}&vnp_ResponseCode=24`;
+  const bankCode = String(req.query.bankCode || 'NCB');
+  const language = String(req.query.language || 'vn');
+  const desc = String(req.query.desc || `Thanh toan don hang ${orderId}`);
+  const succeed = `/vnpay/return?orderId=${encodeURIComponent(orderId)}&vnp_ResponseCode=00&vnp_BankCode=${encodeURIComponent(bankCode)}&vnp_Locale=${encodeURIComponent(language)}`;
+  const failed = `/vnpay/return?orderId=${encodeURIComponent(orderId)}&vnp_ResponseCode=24&vnp_BankCode=${encodeURIComponent(bankCode)}&vnp_Locale=${encodeURIComponent(language)}`;
   const html = `<!doctype html>
-  <html><head><meta charset="utf-8" /><title>VNPay (DEMO)</title>
-  <style>body{font-family:sans-serif;max-width:640px;margin:40px auto;padding:0 16px} .btn{display:inline-block;padding:10px 14px;border-radius:8px;text-decoration:none} .primary{background:#0ea5e9;color:#fff} .ghost{border:1px solid #cbd5e1;color:#0f172a} .row{display:flex;gap:8px;margin-top:12px}</style>
+  <html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>VNPay (DEMO)</title>
+  <style>
+    :root{--fg:#0f172a;--muted:#475569;--border:#e2e8f0;--bg:#f8fafc;--primary:#0ea5e9}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;color:var(--fg);background:#fff;max-width:920px;margin:40px auto;padding:0 16px}
+    h1,h2,h3{margin:0 0 10px 0}
+    .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-top:16px}
+    .row{display:flex;gap:16px;flex-wrap:wrap}
+    .field{display:flex;flex-direction:column;gap:6px;flex:1;min-width:240px}
+    label{font-weight:600}
+    input,select,textarea{padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px}
+    .actions{display:flex;gap:10px;margin-top:16px}
+    .btn{display:inline-block;padding:10px 14px;border-radius:8px;text-decoration:none;border:1px solid var(--border);color:var(--fg);background:#fff}
+    .btn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+    .bank-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+    .bank-option{border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;gap:8px;align-items:center}
+    .bank-option input{margin:0}
+    .lang-group{display:flex;gap:12px;align-items:center}
+  </style>
   </head><body>
-  <h2>Thanh toán VNPay (DEMO)</h2>
-  <div>Mã đơn: <b>${orderId}</b></div>
-  <div>Số tiền: <b>${amount}</b></div>
-  <div class="row">
-    <a class="btn primary" href="${succeed}">Thanh toán thành công</a>
-    <a class="btn ghost" href="${failed}">Thanh toán thất bại</a>
+  <h2>VNPay Sandbox (Demo)</h2>
+  <div class="card">
+    <div class="row">
+      <div class="field"><label>Mã đơn</label><input value="${orderId}" readonly /></div>
+      <div class="field"><label>Số tiền</label><input value="${amount}" readonly /></div>
+    </div>
+    <div class="field"><label>Ngân hàng</label>
+      <div class="bank-grid">
+        ${['NCB','VCB','AGRIBANK','SACOMBANK','TECHCOMBANK'].map(code => `
+          <label class=\"bank-option\"><input type=\"radio\" name=\"bank\" value=\"${code}\" ${code===bankCode?'checked':''}/> <span>${code}</span></label>
+        `).join('')}
+      </div>
+    </div>
+    <div class="field"><label>Ngôn ngữ</label>
+      <div class="lang-group">
+        <label><input type="radio" name="locale" value="vn" ${language==='vn'?'checked':''}/> Tiếng Việt</label>
+        <label><input type="radio" name="locale" value="en" ${language==='en'?'checked':''}/> English</label>
+      </div>
+    </div>
+    <div class="field"><label>Nội dung đơn hàng</label><textarea rows="3" placeholder="${desc}">${desc}</textarea></div>
+    <div class="actions">
+      <a id="success" class="btn primary" href="#">Thanh toán</a>
+      <a id="failed" class="btn" href="#">Huỷ</a>
+    </div>
   </div>
+  <script>
+   const qs = new URLSearchParams(location.search);
+   function selected(name){ const el = document.querySelector('input[name="'+name+'"]:checked'); return el ? el.value : null }
+   function u(code){
+     const bank = selected('bank') || 'NCB';
+     const loc = selected('locale') || 'vn';
+     const p = new URLSearchParams(qs);
+     p.set('vnp_ResponseCode', code);
+     p.set('vnp_BankCode', bank);
+     p.set('vnp_Locale', loc);
+     return '/vnpay/return?' + p.toString();
+   }
+   document.getElementById('success').href = u('00');
+   document.getElementById('failed').href = u('24');
+  </script>
   </body></html>`;
   res.setHeader('Content-Type', 'text/html; charset=utf-8').send(html);
 });
