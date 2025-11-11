@@ -103,6 +103,13 @@ app.post('/reset', async (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
+app.get('/exists', async (req: Request, res: Response) => {
+  const email = String((req.query as any).email || '');
+  if (!email) return res.status(400).json({ error: 'email required' });
+  const user = await prisma.user.findUnique({ where: { email } });
+  res.json({ exists: !!user });
+});
+
 app.get('/me', async (req: Request, res: Response) => {
   const auth = req.headers.authorization;
   if (!auth) return res.status(401).json({ error: 'no token' });
