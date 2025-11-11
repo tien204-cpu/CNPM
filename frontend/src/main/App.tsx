@@ -2,6 +2,8 @@ import React, { useEffect, useState, useRef } from 'react'
 
 import axios from 'axios'
 import '../assets/App.css'
+import trackasiagl from 'trackasia-gl'
+import 'trackasia-gl/dist/trackasia-gl.css'
 import { getMappedImage } from './image-map'
 import Admin, { AdminProductCreate } from '../admin/Admin'
 
@@ -9,6 +11,7 @@ const PRODUCT_BASE = import.meta.env.VITE_PRODUCT_BASE || import.meta.env.VITE_A
 const USER_BASE = import.meta.env.VITE_USER_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3001'
 const ORDER_BASE = import.meta.env.VITE_ORDER_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3003'
 const PAYMENT_BASE = (import.meta as any).env.VITE_PAYMENT_BASE || (import.meta as any).env.VITE_API_BASE || 'http://localhost:3004'
+const TRACKASIA_KEY = (import.meta as any).env.VITE_TRACKASIA_KEY || 'a8da2e51d0a720ef81a1762860280f15fa'
 
 type Product = { id: string; name: string; price: number; stock?: number; imageUrl?: string; description?: string }
 
@@ -76,6 +79,8 @@ export default function App() {
   const [shipName, setShipName] = useState<string>('')
   const [shipPhone, setShipPhone] = useState<string>('')
   const [shipAddress, setShipAddress] = useState<string>('')
+  const [shipLat, setShipLat] = useState<number | null>(null)
+  const [shipLng, setShipLng] = useState<number | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'VNPay'>('COD')
   const [vnpBank, setVnpBank] = useState<string>('NCB')
   const [vnpLocale, setVnpLocale] = useState<string>('vn')
@@ -239,6 +244,111 @@ export default function App() {
     return chain.filter(Boolean)
   }
 
+  function removeAccents(s: string) {
+    return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D')
+  }
+
+  function normalizeAddressInput(addr: string) {
+    let a = String(addr || '').trim()
+    if (!a) return a
+    let x = removeAccents(a)
+    // light cleanup only; do not force any city to keep nationwide compatibility
+    x = x.replace(/\s{2,}/g, ' ').trim()
+    if (!/vietnam/i.test(x)) x = x + ', Vietnam'
+    return x
+  }
+
+  async function geocodeAddress(query: string): Promise<Array<{ lat: number; lon: number; display_name?: string }>> {
+    const variants: string[] = []
+    const base = String(query || '').trim()
+    if (base) variants.push(base)
+    const norm = normalizeAddressInput(base)
+    if (norm && norm !== base) variants.push(norm)
+    const ascii = removeAccents(base)
+    if (ascii && ascii !== base && ascii !== norm) variants.push(ascii)
+    // Reordered variant to help Nominatim parse better
+    const parts = base.split(',').map(s => s.trim()).filter(Boolean)
+    if (parts.length >= 3) variants.push(parts.slice(0,2).join(' ') + ', ' + parts.slice(2).join(', '))
+    // Strip leading housenumber token (e.g., "F1/12M,") to allow street-level match as fallback
+    if (parts.length >= 2) {
+      const first = parts[0]
+      if (/^[a-z0-9][a-z0-9\/\-]{0,12}$/i.test(first)) {
+        const noHouse = parts.slice(1).join(', ')
+        if (noHouse && !variants.includes(noHouse)) variants.push(noHouse)
+        const noHouseNorm = normalizeAddressInput(noHouse)
+        if (noHouseNorm && !variants.includes(noHouseNorm)) variants.push(noHouseNorm)
+      }
+    }
+    const bbox = '106.36,11.16,107.20,10.37' // HCMC bias
+
+    // Heuristic structured search for HCMC addresses (helps with formats like F1/12M Huong lo 80, Vinh Loc A, Binh Chanh)
+    const lower = removeAccents(base).toLowerCase()
+    const hasHousePattern = /\d/.test(lower) || /\//.test(lower)
+    const qTokens = Array.from(new Set(lower.split(/[^a-z0-9]+/).filter(w => w.length >= 3)))
+    function scoreDisplay(s?: string) {
+      const t = removeAccents(String(s || '')).toLowerCase()
+      let sc = 0
+      if (/viet\s*nam/.test(t) || /vietnam/.test(t)) sc += 1
+      // token coverage
+      let matched = 0
+      for (const w of qTokens) { if (t.includes(w)) matched++ }
+      sc += Math.min(matched, 6) // cap
+      // house number expectation
+      const tHasNum = /\d/.test(t)
+      const tHasSlash = /\//.test(t)
+      if (hasHousePattern) {
+        if (tHasNum) sc += 2
+        if (tHasSlash) sc += 1
+      }
+      return sc
+    }
+    function sortByScore(list: Array<{ lat:number; lon:number; display_name?: string }>) {
+      return list.slice().sort((a,b) => scoreDisplay(b.display_name) - scoreDisplay(a.display_name))
+    }
+    let street = undefined as string | undefined
+    let house = undefined as string | undefined
+
+    const structuredQueries: string[] = []
+
+    // Primary: TrackAsia (VN-wide)
+    for (const q of variants) {
+      try {
+        if (TRACKASIA_KEY) {
+          const url = `https://maps.track-asia.com/api/v2/place/textsearch/json?language=vi&key=${encodeURIComponent(TRACKASIA_KEY)}&query=${encodeURIComponent(q)}&new_admin=true&include_old_admin=true`
+          const r = await fetch(url, { method: 'GET' })
+          const data: any = await r.json()
+          const results = Array.isArray(data?.results) ? data.results : []
+          let list: Array<{ lat:number; lon:number; display_name?: string }> = results.map((it: any) => ({ lat: Number(it?.geometry?.location?.lat), lon: Number(it?.geometry?.location?.lng), display_name: it?.formatted_address || it?.name }))
+            .filter((p: { lat:number; lon:number }) => Number.isFinite(p.lat) && Number.isFinite(p.lon))
+          list = sortByScore(list)
+          if (list.length > 0) return list
+        }
+      } catch {}
+    }
+
+    for (const q of variants) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=7&addressdetails=1&accept-language=vi,en&countrycodes=vn&q=${encodeURIComponent(q)}`
+        const r = await fetch(url, { method: 'GET' })
+        const arr: any[] = await r.json()
+        let list: Array<{ lat:number; lon:number; display_name?: string }> = (Array.isArray(arr) ? arr : []).filter((it: any) => it && it.lat && it.lon).map((it: any) => ({ lat: parseFloat(it.lat), lon: parseFloat(it.lon), display_name: it.display_name }))
+        list = sortByScore(list)
+        if (list.length > 0) return list
+      } catch {}
+    }
+    // Try structured queries (currently empty; reserved for future structured calls)
+    for (const qs of structuredQueries) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?${qs}`
+        const r = await fetch(url, { method: 'GET' })
+        const arr: any[] = await r.json()
+        const list = sortByScore((Array.isArray(arr) ? arr : []).filter((it: any) => it && it.lat && it.lon).map((it: any) => ({ lat: parseFloat(it.lat), lon: parseFloat(it.lon), display_name: it.display_name })))
+        if (list.length > 0) return list
+      } catch {}
+    }
+    return []
+  }
+
   function pickRecommended(list: Product[], count = 9) {
     const seedStr = String(recoSeed)
     function score(id: string) {
@@ -364,9 +474,19 @@ export default function App() {
     try {
       const headers: any = {}
       if (user?.token) headers.Authorization = `Bearer ${user.token}`
+      let latPayload = shipLat
+      let lngPayload = shipLng
+      if (!(typeof latPayload === 'number' && typeof lngPayload === 'number')) {
+        const cands = await geocodeAddress(sAddress)
+        if (cands[0]) { latPayload = cands[0].lat; lngPayload = cands[0].lon; try { setShipLat(latPayload); setShipLng(lngPayload) } catch {} }
+      }
+      if (!(typeof latPayload === 'number' && typeof lngPayload === 'number')) {
+        alert('Không xác định được vị trí giao hàng từ địa chỉ. Vui lòng bấm "Định vị" hoặc chọn điểm trên bản đồ (click hoặc kéo marker), rồi thử lại.')
+        return
+      }
       const res = await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/orders`, {
         items: cart,
-        shipping: { name: sName, phone: sPhone, address: sAddress },
+        shipping: { name: sName, phone: sPhone, address: sAddress, lat: latPayload, lng: lngPayload },
         payment: { method: paymentMethod },
         userEmail: user.email
       }, { headers })
@@ -893,6 +1013,67 @@ export default function App() {
   }
 
   function CheckoutPage() {
+    const mapRef = useRef<any>(null)
+    const markerRef = useRef<any>(null)
+    const [geoLoading, setGeoLoading] = useState(false)
+    const [geoError, setGeoError] = useState<string | null>(null)
+    const [geoCands, setGeoCands] = useState<Array<{ lat: number; lon: number; display_name?: string }>>([])
+    const [mapBoot, setMapBoot] = useState(0)
+    const bootTimerRef = useRef<any>(null)
+
+    async function geocode(addr?: string) {
+      try {
+        const q = (((addr ?? shipAddressRef.current?.value ?? shipAddress)) || '').trim()
+        if (!q) return
+        setGeoLoading(true)
+        setGeoError(null)
+        const list = await geocodeAddress(q)
+        setGeoCands(list)
+        if (list[0]) { setShipLat(list[0].lat); setShipLng(list[0].lon) }
+        else { setGeoError('Không tìm thấy vị trí phù hợp') }
+      } catch (e: any) {
+        setGeoError('Định vị thất bại')
+      } finally { setGeoLoading(false) }
+    }
+
+    useEffect(() => {
+      try {
+        const TA = trackasiagl as any
+        if (!TA) { return }
+        const hasLL = typeof shipLat === 'number' && typeof shipLng === 'number'
+        if (!mapRef.current) {
+          const center = [hasLL ? shipLng! : 106.700806, hasLL ? shipLat! : 10.776889]
+          mapRef.current = new TA.Map({
+            container: 'shipmap',
+            style: `https://maps.track-asia.com/styles/v2/streets.json?key=${encodeURIComponent(TRACKASIA_KEY || 'a8da2e51d0a720ef81a1762860280f15fa')}`,
+            center,
+            zoom: hasLL ? 16 : 13
+          })
+          mapRef.current.on('click', (ev: any) => {
+            try {
+              const { lng, lat } = ev?.lngLat || {}
+              if (typeof lat === 'number' && typeof lng === 'number') {
+                setShipLat(lat); setShipLng(lng)
+                if (markerRef.current) markerRef.current.setLngLat([lng, lat])
+              }
+            } catch {}
+          })
+        }
+        if (hasLL) {
+          if (!markerRef.current) {
+            markerRef.current = new TA.Marker({ draggable: true }).setLngLat([shipLng!, shipLat!]).addTo(mapRef.current)
+            markerRef.current.on('dragend', () => {
+              try { const c = markerRef.current.getLngLat(); setShipLat(c.lat); setShipLng(c.lng) } catch {}
+            })
+          } else { markerRef.current.setLngLat([shipLng!, shipLat!]) }
+          if (mapRef.current && mapRef.current.flyTo) {
+            mapRef.current.flyTo({ center: [shipLng!, shipLat!], zoom: 16 })
+          }
+        }
+      } catch {}
+      return () => { try { if (bootTimerRef.current) { clearTimeout(bootTimerRef.current); bootTimerRef.current = null } } catch {} }
+    }, [shipLat, shipLng, mapBoot])
+
     return (
       <div className="page">
         <h2>Thanh toán</h2>
@@ -908,8 +1089,28 @@ export default function App() {
           </div>
           <div className="form-row">
             <label>Địa chỉ giao hàng</label>
-            <input className="input" placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành" name="street-address" autoComplete="shipping street-address" defaultValue={shipAddress} ref={shipAddressRef} onBlur={e => setShipAddress(e.target.value)} />
+            <input className="input" placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành" name="street-address" autoComplete="shipping street-address" defaultValue={shipAddress} ref={shipAddressRef} onBlur={e => { setShipAddress(e.target.value); geocode(e.target.value) }} />
           </div>
+          <div className="form-row" style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <button className="btn small" onClick={(e) => { e.preventDefault(); geocode() }}>Định vị</button>
+            {geoLoading && <div className="loading" style={{ padding:0 }}>Đang định vị...</div>}
+            {geoError && <div className="error">{geoError}</div>}
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <div id="shipmap" style={{ width:'100%', height: 260, borderRadius: 12 }} />
+          </div>
+          {geoCands.length >= 1 && (
+            <div className="form-row">
+              <label>Gợi ý</label>
+              <ul style={{ listStyle:'none', padding:0, margin:0 }}>
+                {geoCands.slice(0,5).map((c, i) => (
+                  <li key={i}>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setShipLat(c.lat); setShipLng(c.lon); try { if (markerRef.current && mapRef.current && mapRef.current.flyTo) { markerRef.current.setLngLat([c.lon, c.lat]); mapRef.current.flyTo({ center: [c.lon, c.lat], zoom: 16 }) } } catch {} }}>{c.display_name || `${c.lat},${c.lon}`}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="form-row">
             <label>Phương thức thanh toán</label>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>

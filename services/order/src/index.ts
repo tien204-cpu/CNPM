@@ -175,9 +175,14 @@ app.post('/orders', async (req: any, res: any) => {
           return res.status(402).json({ error: 'payment failed' });
         }
 
-      // Create order in our DB with shipping/payment/userEmail, and store approximate shipping lat/lng
+      // Create order and store precise shipping lat/lng if provided; fallback to pseudoGeocode
       let order;
-      const geo = pseudoGeocode(shipping?.address || 'Saigon');
+      let sLat = typeof shipping?.lat === 'number' ? Number(shipping.lat) : NaN;
+      let sLng = typeof shipping?.lng === 'number' ? Number(shipping.lng) : NaN;
+      if (!Number.isFinite(sLat) || !Number.isFinite(sLng)) {
+        const g = pseudoGeocode(shipping?.address || 'Saigon');
+        sLat = g.lat; sLng = g.lng;
+      }
       order = await prisma.order.create({
         data: {
           total,
@@ -187,8 +192,8 @@ app.post('/orders', async (req: any, res: any) => {
           shippingPhone: shipping?.phone || null,
           shippingAddress: shipping?.address || null,
           paymentMethod,
-          shippingLat: geo.lat,
-          shippingLng: geo.lng,
+          shippingLat: sLat,
+          shippingLng: sLng,
           items: { create: items.map(i => ({ productId: i.productId, qty: i.qty })) }
         },
         include: { items: true }
