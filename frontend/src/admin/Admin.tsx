@@ -144,6 +144,40 @@ export function AdminProductCreate() {
   )
 }
 
+export function AdminRestaurantCreate() {
+  const { token, role, ready } = useAuth()
+  const [name, setName] = useState('')
+  const [addr, setAddr] = useState('')
+  const [lat, setLat] = useState('')
+  const [lng, setLng] = useState('')
+  useEffect(() => { if (ready && role !== 'admin') { window.location.hash = '/' } }, [ready, role])
+  async function submit() {
+    const payload: any = { name: name.trim(), address: addr.trim() }
+    const latV = parseFloat(lat); if (!isNaN(latV)) payload.lat = latV
+    const lngV = parseFloat(lng); if (!isNaN(lngV)) payload.lng = lngV
+    if (!payload.name) { alert('Nhập tên'); return }
+    await axios.post(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants`, payload)
+    window.location.hash = '#/admin'
+  }
+  return (
+    <div className="page">
+      <h2>Thêm nhà hàng</h2>
+      <div className="card">
+        <div className="form-row"><label>Tên</label><input className="input" placeholder="Tên nhà hàng" value={name} onChange={e=>setName(e.target.value)} /></div>
+        <div className="form-row"><label>Địa chỉ</label><input className="input" placeholder="Địa chỉ" value={addr} onChange={e=>setAddr(e.target.value)} /></div>
+        <div className="form-row" style={{ display:'flex', gap:8 }}>
+          <div style={{ flex:1 }}><label>Lat</label><input className="input" placeholder="10.77" value={lat} onChange={e=>setLat(e.target.value)} /></div>
+          <div style={{ flex:1 }}><label>Lng</label><input className="input" placeholder="106.69" value={lng} onChange={e=>setLng(e.target.value)} /></div>
+        </div>
+        <div style={{ display:'flex', gap:8, marginTop:8 }}>
+          <button className="btn" onClick={() => { window.location.hash = '#/admin' }}>Quay lại</button>
+          <button className="btn primary" onClick={submit}>Lưu</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Admin() {
   const { token, role, ready } = useAuth()
   const headers = useMemo(() => token ? { Authorization: `Bearer ${token}` } : {}, [token])
@@ -154,6 +188,12 @@ export default function Admin() {
   const [orders, setOrders] = useState<any[]>([])
   const [restaurants, setRestaurants] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
+  const [oFrom, setOFrom] = useState<string>('')
+  const [oTo, setOTo] = useState<string>('')
+  const [oPage, setOPage] = useState<number>(1)
+  const [oLimit, setOLimit] = useState<number>(20)
+  const [oTotal, setOTotal] = useState<number>(0)
+  const [oTotalPages, setOTotalPages] = useState<number>(1)
   const [armed, setArmed] = useState<Record<string, boolean>>({})
 
   const pNameRef = useRef<HTMLInputElement>(null)
@@ -195,9 +235,28 @@ export default function Admin() {
     const r = await axios.get(`${USER_BASE.replace(/\/$/, '')}/users`, { headers })
     setUsers(r.data || [])
   }
-  async function refreshOrders() {
-    const r = await axios.get(`${ORDER_BASE.replace(/\/$/, '')}/orders`)
-    setOrders(r.data || [])
+  async function refreshOrders(opts?: { page?: number; limit?: number; fromDate?: string; toDate?: string }) {
+    const page = typeof opts?.page === 'number' ? opts!.page : oPage
+    const limit = typeof opts?.limit === 'number' ? opts!.limit : oLimit
+    const fromDate = typeof opts?.fromDate === 'string' ? opts!.fromDate : oFrom
+    const toDate = typeof opts?.toDate === 'string' ? opts!.toDate : oTo
+    const params: any = { page, limit }
+    if (fromDate) params.fromDate = fromDate
+    if (toDate) params.toDate = toDate
+    const r = await axios.get(`${ORDER_BASE.replace(/\/$/, '')}/orders`, { params })
+    const data = r.data
+    if (Array.isArray(data)) {
+      setOrders(data || [])
+      setOTotal((data || []).length)
+      setOTotalPages(1)
+      setOPage(1)
+    } else {
+      setOrders(data?.data || [])
+      setOPage(Number(data?.page || page) || 1)
+      setOLimit(Number(data?.limit || limit) || 20)
+      setOTotal(Number(data?.total || 0) || 0)
+      setOTotalPages(Number(data?.totalPages || 1) || 1)
+    }
   }
 
   useEffect(() => { refreshProducts(); refreshRestaurants(); refreshCategories() }, [])
@@ -437,6 +496,28 @@ export default function Admin() {
 
       {tab==='orders' && (
         <Section title="Danh sách đơn hàng">
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 8, gap: 8 }}>
+            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <label>Từ</label>
+              <input type="date" value={oFrom} onChange={e => setOFrom(e.target.value)} />
+              <label>đến</label>
+              <input type="date" value={oTo} onChange={e => setOTo(e.target.value)} />
+              <button className="btn" onClick={() => { setOPage(1); refreshOrders({ page: 1 }); }}>Lọc</button>
+              <button className="btn ghost" onClick={() => { setOFrom(''); setOTo(''); setOPage(1); refreshOrders({ page: 1, fromDate: '', toDate: '' }); }}>Xoá lọc</button>
+            </div>
+            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <span>Hiển thị</span>
+              <select value={String(oLimit)} onChange={e => { const lim = parseInt(e.target.value || '20'); setOLimit(lim); setOPage(1); refreshOrders({ page: 1, limit: lim }); }}>
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+              <span>Trang {oPage}/{oTotalPages}</span>
+              <button className="btn" disabled={oPage<=1} onClick={() => refreshOrders({ page: oPage - 1 })}>Trước</button>
+              <button className="btn" disabled={oPage>=oTotalPages} onClick={() => refreshOrders({ page: oPage + 1 })}>Sau</button>
+            </div>
+          </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -478,29 +559,9 @@ export default function Admin() {
 
       {tab==='restaurants' && (
         <>
-          <Section title="Thêm nhà hàng">
-            <div className="form-row"><label>Tên</label><input className="input" placeholder="Tên nhà hàng" ref={rNameRef} /></div>
-            <div className="form-row"><label>Địa chỉ</label><input className="input" placeholder="Địa chỉ" ref={rAddrRef} /></div>
-            <div className="form-row" style={{ display:'flex', gap:8 }}>
-              <div style={{ flex:1 }}><label>Lat</label><input className="input" placeholder="10.77" ref={rLatRef} /></div>
-              <div style={{ flex:1 }}><label>Lng</label><input className="input" placeholder="106.69" ref={rLngRef} /></div>
-            </div>
-            <button className="btn primary" onClick={async () => { const name = rNameRef.current?.value || ''; if (!name) { alert('Nhập tên'); return } const address = rAddrRef.current?.value || ''; const lat = Number(rLatRef.current?.value || ''); const lng = Number(rLngRef.current?.value || ''); await axios.post(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants`, { name, address, lat: isNaN(lat)? undefined: lat, lng: isNaN(lng)? undefined: lng }); await refreshRestaurants(); if (rNameRef.current) rNameRef.current.value=''; if (rAddrRef.current) rAddrRef.current.value=''; if (rLatRef.current) rLatRef.current.value=''; if (rLngRef.current) rLngRef.current.value=''; }}>Thêm</button>
-          </Section>
-          <Section title="Gán món vào nhà hàng">
-            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-              <button className="btn" onClick={async () => {
-                try {
-                  await axios.post(`${PRODUCT_BASE.replace(/\/$/, '')}/assign-restaurants`)
-                  await refreshProducts()
-                  alert('Đã gán tất cả món vào các nhà hàng (vòng tròn).')
-                } catch (e: any) {
-                  alert('Thất bại: ' + (e?.response?.data?.error || e?.message))
-                }
-              }}>Gán tất cả món</button>
-              <div className="loading" style={{ padding:0 }}>Yêu cầu đã có nhà hàng được tạo/seed trước đó.</div>
-            </div>
-          </Section>
+          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom: 8 }}>
+            <a className="btn primary" href="#/admin/restaurants/new">Thêm</a>
+          </div>
           <Section title="Danh sách nhà hàng">
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse' }}>

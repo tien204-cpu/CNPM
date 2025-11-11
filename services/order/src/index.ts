@@ -222,12 +222,57 @@ app.post('/orders', async (req: any, res: any) => {
 });
 
 app.get('/orders', async (req: any, res: any) => {
-  const email = (req.query?.email as string) || '';
-  const all = await prisma.order.findMany({
-    where: email ? { userEmail: email } : undefined,
-    include: { items: true }
-  });
-  res.json(all);
+  try {
+    const email = (req.query?.email as string) || '';
+    const page = Math.max(1, parseInt((req.query?.page as string) || '1'));
+    const limRaw = parseInt((req.query?.limit as string) || '20');
+    const limit = Math.min(100, Math.max(1, isNaN(limRaw) ? 20 : limRaw));
+    const fromDateStr = (req.query?.fromDate as string) || (req.query?.from as string) || '';
+    const toDateStr = (req.query?.toDate as string) || (req.query?.to as string) || '';
+
+    const where: any = {};
+    if (email) where.userEmail = email;
+    const andArr: any[] = [];
+    if (fromDateStr) {
+      const d = new Date(fromDateStr);
+      if (!isNaN(d.getTime())) {
+        const start = new Date(d);
+        start.setHours(0, 0, 0, 0);
+        andArr.push({ createdAt: { gte: start } });
+      }
+    }
+    if (toDateStr) {
+      const d = new Date(toDateStr);
+      if (!isNaN(d.getTime())) {
+        const end = new Date(d);
+        end.setHours(23, 59, 59, 999);
+        andArr.push({ createdAt: { lte: end } });
+      }
+    }
+    if (andArr.length) where.AND = andArr;
+
+    const usePaging = !!(req.query?.page || req.query?.limit || fromDateStr || toDateStr || email);
+    if (usePaging) {
+      const total = await prisma.order.count({ where });
+      const list = await prisma.order.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { items: true }
+      });
+      return res.json({ data: list, page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) });
+    } else {
+      const all = await prisma.order.findMany({
+        where,
+        include: { items: true },
+        orderBy: { createdAt: 'desc' }
+      });
+      return res.json(all);
+    }
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
 });
 
 app.get('/orders/:id', async (req: any, res: any) => {

@@ -5,7 +5,7 @@ import '../assets/App.css'
 import trackasiagl from 'trackasia-gl'
 import 'trackasia-gl/dist/trackasia-gl.css'
 import { getMappedImage } from './image-map'
-import Admin, { AdminProductCreate } from '../admin/Admin'
+import Admin, { AdminProductCreate, AdminRestaurantCreate } from '../admin/Admin'
 
 const PRODUCT_BASE = import.meta.env.VITE_PRODUCT_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3002'
 const USER_BASE = import.meta.env.VITE_USER_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3001'
@@ -1218,6 +1218,8 @@ export default function App() {
             <CheckoutPage />
           ) : route === '/admin' ? (
             <Admin />
+          ) : route === '/admin/restaurants/new' ? (
+            <AdminRestaurantCreate />
           ) : route === '/admin/products/new' ? (
             <AdminProductCreate />
           ) : (
