@@ -81,12 +81,12 @@ Bạn sẽ thấy danh sách các container đang chạy:
 - `product-service` - Port 3002
 - `order-service` - Port 3003
 - `payment-service` - Port 3004
-- `frontend` - Port 3000
+- `frontend` - Port 5173
 - `postgres` - Port 5432
 
 ### Truy cập ứng dụng
 
-- **Frontend**: http://localhost:3000
+- **Frontend**: http://localhost:5173
 - **User API**: http://localhost:3001
 - **Product API**: http://localhost:3002
 - **Order API**: http://localhost:3003
