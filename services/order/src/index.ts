@@ -13,6 +13,32 @@ function appendLog(entry: any) {
   }
 }
 
+// Fetch unique restaurants for an order's items, preserving item order
+async function getRestaurantsForOrder(orderId: string): Promise<Array<{ id: string; name?: string; address?: string; lat: number; lng: number }>> {
+  const out: Array<{ id: string; name?: string; address?: string; lat: number; lng: number }> = [];
+  const seen = new Set<string>();
+  try {
+    const o = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
+    if (!o || !Array.isArray(o.items)) return out;
+    for (const it of o.items) {
+      try {
+        const prod = await axios.get(`${PRODUCT_URL}/products/${it.productId}`).then(r => r.data);
+        const rid = prod?.restaurantId;
+        if (rid && !seen.has(rid)) {
+          seen.add(rid);
+          try {
+            const rest = await axios.get(`${PRODUCT_URL}/restaurants/${rid}`).then(r => r.data);
+            if (rest && typeof rest.lat === 'number' && typeof rest.lng === 'number') {
+              out.push({ id: rid, name: rest.name, address: rest.address, lat: rest.lat, lng: rest.lng });
+            }
+          } catch {}
+        }
+      } catch {}
+    }
+  } catch {}
+  return out;
+}
+
 const app = express();
 app.use(express.json());
 
@@ -43,7 +69,7 @@ const prisma = new PrismaClient();
 
 const listeners = new Map<string, Set<Response>>();
 // Keep last known drone route/position per order so late viewers still see the route
-const lastDrone: Map<string, { path?: Array<{ lat: number; lng: number; t: number }>; start?: { lat: number; lng: number }; end?: { lat: number; lng: number }; lastPos?: { lat: number; lng: number; t: number } }> = new Map();
+const lastDrone: Map<string, { path?: Array<{ lat: number; lng: number; t: number }>; start?: { lat: number; lng: number }; end?: { lat: number; lng: number }; lastPos?: { lat: number; lng: number; t: number }; stops?: Array<{ lat: number; lng: number; name?: string; address?: string }>; phase?: 'pickup' | 'delivery' }> = new Map();
 // Track arm timers so starting delivery won't be overwritten by scheduled prep status
 const armTimers: Map<string, any> = new Map();
 function sendEvent(res: Response, event: string, data: any) {
@@ -298,11 +324,13 @@ app.get('/orders/:id/events', async (req: any, res: any) => {
   if (current) sendEvent(res, 'status', { id, status: current.status });
   // replay last known drone route/pos to newly connected client
   const last = lastDrone.get(id);
-  if (last && last.path && last.start && last.end) {
-    sendEvent(res, 'drone', { type: 'route', path: last.path, start: last.start, end: last.end });
-    if (last.lastPos) {
-      sendEvent(res, 'drone', { type: 'pos', lat: last.lastPos.lat, lng: last.lastPos.lng, progress: last.lastPos.t });
-    }
+  if (last && last.path) {
+    const payload: any = { type: 'route', path: last.path };
+    if (last.start) payload.start = last.start;
+    if (last.end) payload.end = last.end;
+    if (last.stops) payload.stops = last.stops;
+    sendEvent(res, 'drone', payload);
+    if (last.lastPos) sendEvent(res, 'drone', { type: 'pos', lat: last.lastPos.lat, lng: last.lastPos.lng, progress: last.lastPos.t });
   }
 });
 
@@ -310,7 +338,7 @@ app.get('/orders/:id/events', async (req: any, res: any) => {
 app.post('/orders/:id/drone/arm', async (req: any, res: any) => {
   const id = req.params.id as string;
   try {
-    const order = await prisma.order.findUnique({ where: { id } });
+    const order = await prisma.order.findUnique({ where: { id }, include: { items: true } });
     if (!order) return res.status(404).json({ error: 'not found' });
     if (order.status === 'Chuẩn bị giao hàng' || order.status === 'Đang giao đồ ăn bằng drone' || order.status === 'Đã giao đồ ăn tới nhà') {
       return res.json({ ok: true, status: order.status });
@@ -318,17 +346,45 @@ app.post('/orders/:id/drone/arm', async (req: any, res: any) => {
     if (order.status === 'Điều drone tới nhà hàng') {
       await setStatus(id, 'Bắt đầu lấy đồ ăn');
     }
-    if (armTimers.has(id)) { try { clearTimeout(armTimers.get(id)); } catch {} }
-    const t = setTimeout(async () => {
-      try {
-        const cur = await prisma.order.findUnique({ where: { id } });
-        if (cur && cur.status !== 'Đang giao đồ ăn bằng drone' && cur.status !== 'Đã giao đồ ăn tới nhà') {
-          await setStatus(id, 'Chuẩn bị giao hàng');
-        }
-      } catch {}
-      finally { armTimers.delete(id); }
-    }, randomMs(20000, 30000));
-    armTimers.set(id, t);
+    if (armTimers.has(id)) { try { clearTimeout(armTimers.get(id)); } catch {} armTimers.delete(id); }
+
+    // Build pickup route across all restaurants in the order
+    const rests = await getRestaurantsForOrder(id);
+    let points: Array<{ lat: number; lng: number }> = [];
+    for (let i = 0; i < rests.length; i++) {
+      const cur = { lat: rests[i].lat, lng: rests[i].lng };
+      const prev = i === 0 ? cur : { lat: rests[i - 1].lat, lng: rests[i - 1].lng };
+      const segN = 30;
+      for (let k = 0; k <= segN; k++) {
+        const t = k / segN;
+        points.push({ lat: prev.lat * (1 - t) + cur.lat * t, lng: prev.lng * (1 - t) + cur.lng * t });
+      }
+    }
+    if (points.length === 0) {
+      // fallback: no restaurants with coords -> simulate tiny loop near center
+      const center = pseudoGeocode(order.shippingAddress || 'Saigon');
+      points = [center, { lat: center.lat + 0.005, lng: center.lng + 0.003 }, { lat: center.lat, lng: center.lng }];
+    }
+    const path = points.map((p, idx) => ({ lat: p.lat, lng: p.lng, t: points.length <= 1 ? 1 : idx / (points.length - 1) }));
+    const stops = rests.map(r => ({ lat: r.lat, lng: r.lng, name: r.name, address: r.address }));
+    lastDrone.set(id, { path, lastPos: path[0], stops, phase: 'pickup' });
+    broadcast(id, 'drone', { type: 'route', path, stops });
+
+    // simulate movement along pickup path
+    let idx = 0;
+    const tick = async () => {
+      if (idx >= path.length) {
+        await setStatus(id, 'Chuẩn bị giao hàng');
+        return;
+      }
+      const p = path[idx++];
+      const last = lastDrone.get(id) || {} as any;
+      last.lastPos = p; if (!last.path) last.path = path; if (!last.stops) last.stops = stops; last.phase = 'pickup';
+      lastDrone.set(id, last);
+      broadcast(id, 'drone', { type: 'pos', lat: p.lat, lng: p.lng, progress: p.t });
+      setTimeout(tick, 500);
+    };
+    setTimeout(tick, 500);
     res.json({ ok: true });
   } catch (e: any) {
     res.status(500).json({ error: e?.message || String(e) });
@@ -344,7 +400,10 @@ app.post('/orders/:id/drone/start', async (req: any, res: any) => {
     // Cancel any pending arm timer so it won't overwrite delivering status
     if (armTimers.has(id)) { try { clearTimeout(armTimers.get(id)); } catch {} armTimers.delete(id); }
     // Pre-compute route immediately so client can see the path right away once starting delivery
-    let start = await getRestaurantForOrder(id);
+    let start = null as any;
+    const last = lastDrone.get(id);
+    if (last && last.lastPos) start = { lat: last.lastPos.lat, lng: last.lastPos.lng } as any;
+    if (!start) start = await getRestaurantForOrder(id);
     const ord: any = order as any;
     const ship = { lat: ord?.shippingLat, lng: ord?.shippingLng };
     const end = { lat: (typeof ship.lat === 'number' ? ship.lat : pseudoGeocode(ord?.shippingAddress || '').lat), lng: (typeof ship.lng === 'number' ? ship.lng : pseudoGeocode(ord?.shippingAddress || '').lng) };
@@ -358,8 +417,11 @@ app.post('/orders/:id/drone/start', async (req: any, res: any) => {
       lng: ((start as any).lng * (N - i) + end.lng * i) / N,
       t: i / N
     }));
-    lastDrone.set(id, { path, start: start as any, end, lastPos: path[0] });
-    broadcast(id, 'drone', { type: 'route', path, start, end });
+    const cur = lastDrone.get(id) || {} as any;
+    cur.path = path; cur.start = start as any; cur.end = end; cur.lastPos = path[0]; cur.phase = 'delivery';
+    lastDrone.set(id, cur);
+    // append delivery segment to existing pickup route on client
+    broadcast(id, 'drone', { type: 'route', path, start, end, append: true });
     // begin moving -> set to Đang giao ngay khi bấm bắt đầu
     await setStatus(id, 'Đang giao đồ ăn bằng drone');
     let idx = 0;

@@ -846,6 +846,9 @@ export default function App() {
     const mapRef = useRef<any>(null)
     const markerRef = useRef<any>(null)
     const routeRef = useRef<any>(null)
+    const stopMarkersRef = useRef<any[]>([])
+    const stopsDataRef = useRef<Array<{ lat:number; lng:number; name?: string; address?: string }>>([])
+    const shownStopsRef = useRef<Set<number>>(new Set())
     useEffect(() => {
       // init map immediately so user sees base map even before route events
       try {
@@ -875,15 +878,65 @@ export default function App() {
             }
             if (data.type === 'route' && Array.isArray(data.path)) {
               const latlngs = data.path.map((p: any) => [p.lat, p.lng])
-              if (routeRef.current) { try { mapRef.current.removeLayer(routeRef.current) } catch {} }
-              routeRef.current = L.polyline(latlngs, { color: '#7c3aed' }).addTo(mapRef.current)
-              mapRef.current.fitBounds(routeRef.current.getBounds(), { padding: [20, 20] })
-              if (!markerRef.current) markerRef.current = L.marker(latlngs[0]).addTo(mapRef.current)
-              else markerRef.current.setLatLng(latlngs[0])
+              if (data.append && routeRef.current) {
+                try {
+                  const existing = routeRef.current.getLatLngs() || []
+                  const merged = existing.concat(latlngs.map((ll: any) => L.latLng(ll[0], ll[1])))
+                  routeRef.current.setLatLngs(merged)
+                } catch {
+                  try { routeRef.current = L.polyline(latlngs, { color: '#7c3aed' }).addTo(mapRef.current) } catch {}
+                }
+              } else {
+                if (routeRef.current) { try { mapRef.current.removeLayer(routeRef.current) } catch {} }
+                routeRef.current = L.polyline(latlngs, { color: '#7c3aed' }).addTo(mapRef.current)
+                // reset shown stops when drawing a new route (pickup phase)
+                shownStopsRef.current = new Set()
+                // clear old stop markers
+                for (const m of stopMarkersRef.current) { try { mapRef.current.removeLayer(m) } catch {} }
+                stopMarkersRef.current = []
+              }
+              // fit bounds to new/updated route
+              try { mapRef.current.fitBounds(routeRef.current.getBounds(), { padding: [20, 20] }) } catch {}
+              // place or update stops markers if provided
+              if (Array.isArray(data.stops)) {
+                stopsDataRef.current = data.stops
+                for (const m of stopMarkersRef.current) { try { mapRef.current.removeLayer(m) } catch {} }
+                stopMarkersRef.current = []
+                data.stops.forEach((s: any) => {
+                  try {
+                    const mk = L.marker([s.lat, s.lng]).addTo(mapRef.current)
+                    const html = `<div><strong>${(s.name||'Nhà hàng')}</strong><div>${(s.address||'')}</div></div>`
+                    mk.bindPopup(html)
+                    stopMarkersRef.current.push(mk)
+                  } catch {}
+                })
+              }
+              // ensure drone marker at start of the new segment
+              const head = latlngs[0]
+              if (head) {
+                if (!markerRef.current) markerRef.current = L.marker(head).addTo(mapRef.current)
+                else markerRef.current.setLatLng(head)
+              }
             } else if (data.type === 'pos' && typeof data.lat === 'number' && typeof data.lng === 'number') {
               if (!markerRef.current) {
                 markerRef.current = (window as any).L.marker([data.lat, data.lng]).addTo(mapRef.current)
               } else { markerRef.current.setLatLng([data.lat, data.lng]) }
+              // auto open popup when nearing a stop (once per stop)
+              try {
+                const pt = L.latLng(data.lat, data.lng)
+                const stops = stopsDataRef.current || []
+                for (let i = 0; i < stops.length; i++) {
+                  if (shownStopsRef.current.has(i)) continue
+                  const s = stops[i]
+                  const d = pt.distanceTo(L.latLng(s.lat, s.lng))
+                  if (d < 200) { // within 200m
+                    shownStopsRef.current.add(i)
+                    const mk = stopMarkersRef.current[i]
+                    try { mk && mk.openPopup() } catch {}
+                    break
+                  }
+                }
+              } catch {}
             } else if (data.type === 'arrived') {
               // nothing, user waits for admin to confirm delivered
             }
