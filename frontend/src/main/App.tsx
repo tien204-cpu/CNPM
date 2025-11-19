@@ -751,7 +751,11 @@ export default function App() {
     useEffect(() => {
       const email = user?.email || ''
       const url = `${ORDER_BASE.replace(/\/$/, '')}/orders` + (email ? `?email=${encodeURIComponent(email)}` : '')
-      axios.get(url).then(r => setOrders(r.data || [])).catch(() => setOrders([]))
+      axios.get(url).then(r => {
+        const data = r.data
+        const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
+        setOrders(list || [])
+      }).catch(() => setOrders([]))
     }, [user])
     const esRef = useRef<Record<string, EventSource>>({})
     useEffect(() => {
