@@ -178,16 +178,53 @@ export function AdminRestaurantCreate() {
   )
 }
 
+export function AdminDroneCreate() {
+  const { token, role, ready } = useAuth()
+  const nameRef = useRef<HTMLInputElement>(null)
+  const imgRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (ready && role !== 'admin') { window.location.hash = '/' } }, [ready, role])
+  async function submit() {
+    const name = nameRef.current?.value?.trim() || ''
+    let imageUrl = imgRef.current?.value?.trim() || ''
+    if (!name) { alert('Nhập tên drone'); return }
+    try {
+      const f = fileRef.current?.files && fileRef.current.files[0]
+      if (f) {
+        const up = await uploadImage(f)
+        if (up) imageUrl = up
+      }
+    } catch {}
+    await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/drones`, { name, imageUrl })
+    window.location.hash = '#/admin'
+  }
+  return (
+    <div className="page">
+      <h2>Thêm drone</h2>
+      <div className="card">
+        <div className="form-row"><label>Tên drone</label><input className="input" placeholder="Ví dụ: Drone A" ref={nameRef} /></div>
+        <div className="form-row"><label>Ảnh (URL hoặc /images/...)</label><input className="input" placeholder="/images/drone.png" ref={imgRef} /></div>
+        <div className="form-row"><label>Tải ảnh</label><input type="file" accept="image/*" ref={fileRef} /></div>
+        <div style={{ display:'flex', gap:8, marginTop:8 }}>
+          <button className="btn" onClick={() => { window.location.hash = '#/admin' }}>Quay lại</button>
+          <button className="btn primary" onClick={submit}>Lưu</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Admin() {
   const { token, role, ready } = useAuth()
   const headers = useMemo(() => token ? { Authorization: `Bearer ${token}` } : {}, [token])
-  const [tab, setTab] = useState<'products'|'users'|'orders'|'restaurants'|'categories'>('orders')
+  const [tab, setTab] = useState<'products'|'users'|'orders'|'restaurants'|'categories'|'drones'>('orders')
 
   const [products, setProducts] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [orders, setOrders] = useState<any[]>([])
   const [restaurants, setRestaurants] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
+  const [drones, setDrones] = useState<any[]>([])
   const [oFrom, setOFrom] = useState<string>('')
   const [oTo, setOTo] = useState<string>('')
   const [oPage, setOPage] = useState<number>(1)
@@ -195,6 +232,7 @@ export default function Admin() {
   const [oTotal, setOTotal] = useState<number>(0)
   const [oTotalPages, setOTotalPages] = useState<number>(1)
   const [armed, setArmed] = useState<Record<string, boolean>>({})
+  const [editingDrone, setEditingDrone] = useState<any | null>(null)
 
   const pNameRef = useRef<HTMLInputElement>(null)
   const pPriceRef = useRef<HTMLInputElement>(null)
@@ -231,6 +269,10 @@ export default function Admin() {
     const r = await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/categories`)
     setCategories(r.data || [])
   }
+  async function refreshDrones() {
+    const r = await axios.get(`${ORDER_BASE.replace(/\/$/, '')}/drones`)
+    setDrones(r.data || [])
+  }
   async function refreshUsers() {
     const r = await axios.get(`${USER_BASE.replace(/\/$/, '')}/users`, { headers })
     setUsers(r.data || [])
@@ -259,7 +301,7 @@ export default function Admin() {
     }
   }
 
-  useEffect(() => { refreshProducts(); refreshRestaurants(); refreshCategories() }, [])
+  useEffect(() => { refreshProducts(); refreshRestaurants(); refreshCategories(); refreshDrones() }, [])
   useEffect(() => { if (role==='admin') refreshUsers() }, [role])
   useEffect(() => { refreshOrders() }, [])
 
@@ -280,7 +322,13 @@ export default function Admin() {
           es.addEventListener('status', (ev: any) => {
             try {
               const data = JSON.parse(ev.data || '{}')
-              setOrders(prev => prev.map(px => px.id === o.id ? { ...px, status: data.status } : px))
+              setOrders(prev => prev.map(px => px.id === o.id ? {
+                ...px,
+                status: data.status,
+                droneName: (data as any).droneName ?? px.droneName,
+                droneSpeed: (data as any).droneSpeed ?? px.droneSpeed,
+                deliveryTimeSeconds: (data as any).deliveryTimeSeconds ?? px.deliveryTimeSeconds,
+              } : px))
             } catch {}
           })
           es.addEventListener('deleted', () => {
@@ -384,6 +432,81 @@ export default function Admin() {
     await refreshOrders()
   }
 
+  async function addDrone() {
+    const name = val('d-name-new').trim()
+    let imageUrl = val('d-img-new').trim()
+    if (!name) { alert('Nhập tên drone'); return }
+    try {
+      const f = fileOf('d-file-new')
+      if (f) {
+        const up = await uploadImage(f)
+        if (up) imageUrl = up
+      }
+    } catch {}
+    await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/drones`, { name, imageUrl })
+    await refreshDrones()
+    const nameEl = document.getElementById('d-name-new') as HTMLInputElement | null
+    const imgEl = document.getElementById('d-img-new') as HTMLInputElement | null
+    const fileEl = document.getElementById('d-file-new') as HTMLInputElement | null
+    if (nameEl) nameEl.value = ''
+    if (imgEl) imgEl.value = ''
+    if (fileEl) fileEl.value = ''
+  }
+
+  async function toggleDroneUsage(d: any, active: boolean) {
+    await axios.patch(`${ORDER_BASE.replace(/\/$/, '')}/drones/${d.id}`, { isActive: active, status: active ? 'ready' : d.status })
+    await refreshDrones()
+  }
+
+  async function updateDrone(d: any) {
+    const name = val('edit-d-name').trim()
+    let imageUrl = val('edit-d-img').trim()
+    const speedRaw = val('edit-d-speed').trim()
+    const payload: any = {}
+    if (name) payload.name = name
+    if (imageUrl) payload.imageUrl = imageUrl
+    else payload.imageUrl = null
+    if (speedRaw) {
+      const sp = parseFloat(speedRaw)
+      if (!isNaN(sp)) payload.speedKmh = sp
+    }
+    try {
+      const f = fileOf('edit-d-file')
+      if (f) {
+        const up = await uploadImage(f)
+        if (up) payload.imageUrl = up
+      }
+    } catch {}
+    await axios.patch(`${ORDER_BASE.replace(/\/$/, '')}/drones/${d.id}`, payload)
+    setEditingDrone(null)
+    await refreshDrones()
+  }
+
+  async function deleteDrone(d: any) {
+    if (!confirm('Xoá drone này?')) return
+    try {
+      await axios.delete(`${ORDER_BASE.replace(/\/$/, '')}/drones/${d.id}`)
+      await refreshDrones()
+    } catch (e: any) {
+      const msg = (e as any)?.response?.data?.error || 'Xoá drone thất bại'
+      alert(msg)
+    }
+  }
+
+  function droneStatusColor(status?: string) {
+    const s = String(status || '').toLowerCase()
+    if (s === 'ready') return '#22c55e'
+    if (s === 'waiting') return '#eab308'
+    if (s === 'in_use' || s === 'inuse') return '#ef4444'
+    return '#9ca3af'
+  }
+
+  function droneImageSrc(d: any, index: number) {
+    if (d && d.imageUrl) return d.imageUrl as string
+    const seed = encodeURIComponent(String(d?.name || `drone-${index + 1}`))
+    return `https://loremflickr.com/seed/${seed}/80/80/drone`
+  }
+
   return (
     <div className="page">
       <h2>Admin</h2>
@@ -393,6 +516,7 @@ export default function Admin() {
             <button className={`chip${tab==='products'?' active':''}`} onClick={() => setTab('products')}>Sản phẩm</button>
             <button className={`chip${tab==='users'?' active':''}`} onClick={() => setTab('users')}>Người dùng</button>
             <button className={`chip${tab==='orders'?' active':''}`} onClick={() => setTab('orders')}>Đơn hàng</button>
+            <button className={`chip${tab==='drones'?' active':''}`} onClick={() => setTab('drones')}>Drone</button>
             <button className={`chip${tab==='restaurants'?' active':''}`} onClick={() => setTab('restaurants')}>Nhà hàng</button>
             <button className={`chip${tab==='categories'?' active':''}`} onClick={() => setTab('categories')}>Danh mục</button>
           </div>
@@ -531,28 +655,178 @@ export default function Admin() {
                 </tr>
               </thead>
               <tbody>
-                {orders.map(o => (
-                  <tr key={o.id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td>{o.id.slice(0,6)}</td>
-                    <td>{o.userEmail || ''}</td>
-                    <td>{o.createdAt ? new Date(o.createdAt).toLocaleString() : ''}</td>
-                    <td>${Number(o.total || 0).toFixed(2)}</td>
+                {orders.map(o => {
+                  const hasDrone = !!(o as any).droneId
+                  const activeDrones = drones.filter(d => d.isActive)
+                  const speed = typeof (o as any).droneSpeed === 'number' ? (o as any).droneSpeed as number : null
+                  const eta = typeof (o as any).deliveryTimeSeconds === 'number' ? Math.round((o as any).deliveryTimeSeconds / 60) : null
+                  return (
+                    <tr key={o.id} style={{ borderTop: '1px solid var(--border)' }}>
+                      <td>{o.id.slice(0,6)}</td>
+                      <td>{o.userEmail || ''}</td>
+                      <td>{o.createdAt ? new Date(o.createdAt).toLocaleString() : ''}</td>
+                      <td>${Number(o.total || 0).toFixed(2)}</td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span className="pill">{o.status || ''}</span>
+                          </div>
+                          {(((o as any).droneName) || speed != null || eta != null) && (
+                            <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              {(o as any).droneName && <div>Drone: {(o as any).droneName}</div>}
+                              {speed != null && <div>Vận tốc: {speed.toFixed(1)} km/h</div>}
+                              {eta != null && <div>Thời gian: ~{eta} phút</div>}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <select
+                            value={(o as any).droneId || ''}
+                            onChange={async e => {
+                              const v = e.target.value
+                              if (!v) { alert('Chọn drone cho đơn này'); return }
+                              try {
+                                await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/orders/${o.id}/drone/select`, { droneId: v })
+                                await refreshOrders()
+                                await refreshDrones()
+                              } catch {}
+                            }}
+                          >
+                            <option value="">-- chọn drone --</option>
+                            {activeDrones.map(d => (
+                              <option key={d.id} value={d.id}>{d.name}</option>
+                            ))}
+                          </select>
+                          <button
+                            className="btn small"
+                            style={{ background: (armed[o.id] ? 'var(--accent)' : ''), color: (armed[o.id] ? '#fff' : '') }}
+                            disabled={!hasDrone}
+                            onClick={async () => {
+                              if (!(o as any).droneId) { alert('Vui lòng chọn drone cho đơn này trước'); return }
+                              const next = !armed[o.id]
+                              if (next) {
+                                try { await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/orders/${o.id}/drone/arm`); } catch {}
+                              }
+                              setArmed(a => ({ ...a, [o.id]: next }))
+                            }}
+                            title="Bật/tắt drone"
+                          >
+                            🛸
+                          </button>
+                          <button
+                            className="btn small primary"
+                            disabled={!hasDrone || !armed[o.id]}
+                            onClick={async () => {
+                              if (!(o as any).droneId) { alert('Vui lòng chọn drone cho đơn này trước'); return }
+                              await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/orders/${o.id}/drone/start`)
+                            }}
+                          >
+                            Bắt đầu drone
+                          </button>
+                          <button
+                            className="btn small"
+                            disabled={!hasDrone}
+                            onClick={() => updateOrderStatus(o, 'Đã giao đồ ăn tới nhà')}
+                          >
+                            Xác nhận đã giao
+                          </button>
+                          <a className="btn small ghost" href={`#/track/${o.id}`}>Theo dõi</a>
+                          <button className="btn small ghost" onClick={() => deleteOrder(o.id)}>Xoá</button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
+
+      {tab==='drones' && (
+        <Section title="Quản lý drone">
+          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom: 8 }}>
+            <a className="btn primary" href="#/admin/drones/new">Thêm drone</a>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th align="left">Drone</th>
+                  <th align="left">Hình ảnh</th>
+                  <th align="left">Trạng thái</th>
+                  <th align="left">Hành động</th>
+                </tr>
+              </thead>
+              <tbody>
+                {drones.map((d, idx) => (
+                  <tr key={d.id} style={{ borderTop: '1px solid var(--border)' }}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="pill">{o.status || ''}</span>
-                        <button className="btn small" style={{ background: (armed[o.id] ? 'var(--accent)' : ''), color: (armed[o.id] ? '#fff' : '') }} onClick={async () => { const next = !armed[o.id]; if (next) { try { await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/orders/${o.id}/drone/arm`); } catch {} } setArmed(a => ({ ...a, [o.id]: next })); }} title="Bật/tắt drone">🛸</button>
-                        <button className="btn small primary" disabled={!armed[o.id]} onClick={async () => { await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/orders/${o.id}/drone/start`); }}>Bắt đầu drone</button>
-                        <button className="btn small" onClick={() => updateOrderStatus(o, 'Đã giao đồ ăn tới nhà')}>Xác nhận đã giao</button>
-                        <a className="btn small ghost" href={`#/track/${o.id}`}>Theo dõi</a>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', display: 'inline-block', background: droneStatusColor(d.status) }} />
+                        <span>{d.name}</span>
                       </div>
+                      {d.speedKmh != null && (
+                        <div style={{ marginTop: 4, fontSize: 12, color: 'var(--muted)' }}>
+                          Tốc độ: {d.speedKmh} km/h
+                        </div>
+                      )}
                     </td>
+                    <td>
+                      <img src={droneImageSrc(d, idx)} style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6 }} />
+                    </td>
+                    <td>{d.status || ''}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <button className="btn small ghost" onClick={() => deleteOrder(o.id)}>Xoá</button>
+                      <button className="btn small" disabled={d.isActive} onClick={() => toggleDroneUsage(d, true)}>Sử dụng</button>
+                      <button className="btn small ghost" style={{ marginLeft: 6 }} disabled={!d.isActive || String(d.status || '').toLowerCase() === 'in_use'} onClick={() => toggleDroneUsage(d, false)}>Huỷ</button>
+                      <button className="btn small" style={{ marginLeft: 6 }} onClick={() => setEditingDrone(d)}>Sửa</button>
+                      <button className="btn small ghost" style={{ marginLeft: 6 }} onClick={() => deleteDrone(d)}>Xoá</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {editingDrone && (
+              <div key={editingDrone.id} style={{ marginTop: 12 }}>
+                <h4>Chỉnh sửa drone</h4>
+                <div className="form-row">
+                  <label>Tên drone</label>
+                  <input
+                    id="edit-d-name"
+                    className="input"
+                    defaultValue={editingDrone.name || ''}
+                  />
+                </div>
+                <div className="form-row">
+                  <label>Ảnh (URL hoặc /images/...)</label>
+                  <input
+                    id="edit-d-img"
+                    className="input"
+                    defaultValue={editingDrone.imageUrl || ''}
+                    placeholder="/images/drone.png"
+                  />
+                </div>
+                <div className="form-row">
+                  <label>Tốc độ (km/h)</label>
+                  <input
+                    id="edit-d-speed"
+                    className="input"
+                    defaultValue={editingDrone.speedKmh != null ? String(editingDrone.speedKmh) : ''}
+                    placeholder="40"
+                  />
+                </div>
+                <div className="form-row">
+                  <label>Tải ảnh</label>
+                  <input id="edit-d-file" type="file" accept="image/*" />
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button className="btn" onClick={() => setEditingDrone(null)}>Huỷ</button>
+                  <button className="btn primary" onClick={() => editingDrone && updateDrone(editingDrone)}>Lưu</button>
+                </div>
+              </div>
+            )}
           </div>
         </Section>
       )}

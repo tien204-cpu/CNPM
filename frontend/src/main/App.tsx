@@ -5,7 +5,7 @@ import '../assets/App.css'
 import trackasiagl from 'trackasia-gl'
 import 'trackasia-gl/dist/trackasia-gl.css'
 import { getMappedImage } from './image-map'
-import Admin, { AdminProductCreate, AdminRestaurantCreate } from '../admin/Admin'
+import Admin, { AdminProductCreate, AdminRestaurantCreate, AdminDroneCreate } from '../admin/Admin'
 
 const PRODUCT_BASE = import.meta.env.VITE_PRODUCT_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3002'
 const USER_BASE = import.meta.env.VITE_USER_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:3001'
@@ -82,7 +82,7 @@ export default function App() {
   const [shipLat, setShipLat] = useState<number | null>(null)
   const [shipLng, setShipLng] = useState<number | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'VNPay'>('COD')
-  const [vnpBank, setVnpBank] = useState<string>('NCB')
+  const [vnpBank, setVnpBank] = useState<string>('VNPAYQR')
   const [vnpLocale, setVnpLocale] = useState<string>('vn')
   const [vnpDesc, setVnpDesc] = useState<string>('')
   const [lastOrder, setLastOrder] = useState<any>(null)
@@ -497,7 +497,10 @@ export default function App() {
         try {
           const pr = await axios.post(`${PAYMENT_BASE.replace(/\/$/, '')}/vnpay/create`, {
             amount: Number(order?.total || 0),
-            orderId: order?.id
+            orderId: order?.id,
+            bankCode: vnpBank || undefined,
+            language: vnpLocale || undefined,
+            description: (vnpDesc || '').trim() || undefined,
           })
           const url = pr?.data?.url
           if (url) { window.location.href = url; return }
@@ -680,7 +683,7 @@ export default function App() {
     )
   }
 
-  function BillPage({ id }: { id: string }) {
+  function BillPage({ id, vnpCode }: { id: string; vnpCode?: string | null }) {
     const [order, setOrder] = useState<any>(lastOrder && lastOrder?.id === id ? lastOrder : null)
     useEffect(() => {
       if (!order && id) {
@@ -704,10 +707,30 @@ export default function App() {
     if (!order) return <div className="page"><div className="card"><div className="loading">Đang tải đơn hàng...</div></div></div>
     const items: Array<{ productId: string; qty: number }> = order.items || []
     const total = order.total || 0
+    const isVnpSuccess = vnpCode === '00'
+    const isVnpFail = !!vnpCode && vnpCode !== '00'
     return (
       <div className="page">
         <h2>Hóa đơn</h2>
         <div className="card">
+          {vnpCode && (
+            <div style={{ marginBottom: 12, padding: 12, borderRadius: 8, border: '1px solid var(--border)', background: isVnpSuccess ? '#ecfdf3' : '#fef2f2', color: isVnpSuccess ? '#166534' : '#b91c1c' }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                {isVnpSuccess ? 'Thanh toán VNPay thành công' : 'Thanh toán VNPay không thành công hoặc đã bị huỷ'}
+              </div>
+              <div style={{ fontSize: 13, marginBottom: isVnpSuccess ? 8 : 0 }}>
+                {isVnpSuccess ? 'Đơn hàng của bạn đã được thanh toán. Bạn có thể tiếp tục để theo dõi trạng thái giao hàng.' : 'Bạn có thể chọn lại phương thức thanh toán khác hoặc thử thanh toán lại.'}
+              </div>
+              {isVnpSuccess && (
+                <button
+                  className="btn primary"
+                  onClick={() => { go(`/track/${id}`) }}
+                >
+                  Tiếp tục
+                </button>
+              )}
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div><b>Mã đơn:</b> {order.id}</div>
             {order.createdAt && <div><b>Thời gian:</b> {new Date(order.createdAt).toLocaleString()}</div>}
@@ -868,7 +891,16 @@ export default function App() {
       try {
         es = new EventSource(`${ORDER_BASE.replace(/\/$/, '')}/orders/${id}/events`)
         es.addEventListener('status', (ev: any) => {
-          try { const data = JSON.parse(ev.data || '{}'); setOrder((o: any) => ({ ...(o||{}), status: data.status })); } catch {}
+          try {
+            const data = JSON.parse(ev.data || '{}')
+            setOrder((o: any) => ({
+              ...(o || {}),
+              status: data.status,
+              droneName: (data as any).droneName ?? (o && o.droneName),
+              droneSpeed: (data as any).droneSpeed ?? (o && o.droneSpeed),
+              deliveryTimeSeconds: (data as any).deliveryTimeSeconds ?? (o && o.deliveryTimeSeconds),
+            }))
+          } catch {}
         })
         es.addEventListener('drone', (ev: any) => {
           try {
@@ -957,6 +989,17 @@ export default function App() {
           <div style={{ marginTop: 12 }}>
             <StepBar status={order?.status} />
           </div>
+          {order && (order as any).droneName && (
+            <div style={{ marginTop: 8, fontSize: 14, color: 'var(--muted)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div>Tên drone: {(order as any).droneName}</div>
+              {typeof (order as any).droneSpeed === 'number' && (
+                <div>Vận tốc ước tính: {(order as any).droneSpeed.toFixed(1)} km/h</div>
+              )}
+              {typeof (order as any).deliveryTimeSeconds === 'number' && (
+                <div>Thời gian giao ước tính: ~{Math.round((order as any).deliveryTimeSeconds / 60)} phút</div>
+              )}
+            </div>
+          )}
           <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
             <a className="btn ghost" href={`#/bill/${id}`}>Xem hoá đơn</a>
           </div>
@@ -1179,7 +1222,6 @@ export default function App() {
               </label>
             </div>
           </div>
-          {paymentMethod === 'VNPay' && (<></>)}
           <div style={{ marginTop: 12 }}>
             <button className="btn primary" onClick={place} disabled={cart.length === 0}>Đặt hàng</button>
           </div>
@@ -1258,7 +1300,13 @@ export default function App() {
           {route.startsWith('/product/') ? (
             <ProductDetail id={route.split('/product/')[1]} />
           ) : route.startsWith('/bill/') ? (
-            <BillPage id={route.split('/bill/')[1]} />
+            (() => {
+              const raw = route.split('/bill/')[1] || ''
+              const [idPart, queryPart] = raw.split('?')
+              const sp = new URLSearchParams(queryPart || '')
+              const vnpCode = sp.get('vnp_ResponseCode')
+              return <BillPage id={idPart} vnpCode={vnpCode} />
+            })()
           ) : route.startsWith('/track/') ? (
             <TrackPage id={route.split('/track/')[1]} />
           ) : route === '/restaurants' ? (
@@ -1279,6 +1327,8 @@ export default function App() {
             <AdminRestaurantCreate />
           ) : route === '/admin/products/new' ? (
             <AdminProductCreate />
+          ) : route === '/admin/drones/new' ? (
+            <AdminDroneCreate />
           ) : (
             <ProductList />
           )}

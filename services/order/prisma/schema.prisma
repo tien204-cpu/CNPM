@@ -20,6 +20,11 @@ model Order {
   shippingLat  Float?
   shippingLng  Float?
   items      OrderItem[]
+  drone      Drone?   @relation(fields: [droneId], references: [id])
+  droneId    String?
+  droneName  String?
+  droneSpeed Float?
+  deliveryTimeSeconds Int?
 }
 
 model OrderItem {
@@ -29,4 +34,14 @@ model OrderItem {
   orderId   String
   productId String
   qty       Int
+}
+
+model Drone {
+  id        String   @id @default(cuid())
+  name      String
+  imageUrl  String?
+  status    String   @default("ready")
+  isActive  Boolean  @default(false)
+  speedKmh  Float?
+  orders    Order[]
 }

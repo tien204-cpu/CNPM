@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
+import * as crypto from 'crypto';
 
 const app = express();
 app.use(express.json());
@@ -73,6 +74,33 @@ function upsertOrder(o: VnpOrder) {
   writeOrders(list);
 }
 
+function formatYMDHMS(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    d.getFullYear().toString() +
+    pad(d.getMonth() + 1) +
+    pad(d.getDate()) +
+    pad(d.getHours()) +
+    pad(d.getMinutes()) +
+    pad(d.getSeconds())
+  );
+}
+
+function buildVnpSignedUrl(params: Record<string, string>, secretKey: string, vnpUrl: string): string {
+  const keys = Object.keys(params).sort();
+  const encodedPairs: string[] = [];
+  for (const key of keys) {
+    const encodedKey = encodeURIComponent(key);
+    const encodedVal = encodeURIComponent(params[key]).replace(/%20/g, '+');
+    encodedPairs.push(`${encodedKey}=${encodedVal}`);
+  }
+  const signData = encodedPairs.join('&');
+  const hmac = crypto.createHmac('sha512', secretKey);
+  const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+  const query = `${signData}&vnp_SecureHash=${signed}`;
+  return `${vnpUrl}?${query}`;
+}
+
 app.post('/pay', (req: Request, res: Response) => {
   const { amount } = req.body;
   appendLog({ route: '/pay', req: { amount } });
@@ -103,21 +131,52 @@ app.post('/vnpay/create', (req: Request, res: Response) => {
     appendLog({ route: '/vnpay/create', res: out });
     return res.status(400).json(out);
   }
+
+  const tmnCode = process.env.VNP_TMN_CODE || '';
+  const secretKey = process.env.VNP_HASH_SECRET || '';
+  const vnpUrl = process.env.VNP_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
+  if (!tmnCode || !secretKey) {
+    const out = { error: 'VNPAY config missing (VNP_TMN_CODE / VNP_HASH_SECRET)' };
+    appendLog({ route: '/vnpay/create', res: out });
+    return res.status(500).json(out);
+  }
+
   const host = (req.headers['x-forwarded-host'] as string) || req.get('host') || `localhost:${PORT}`;
   const proto = (req.headers['x-forwarded-proto'] as string) || (req.protocol || 'http');
   const base = `${proto}://${host}`;
-  const bn = String(bankCode || 'VNPAYQR');
+  const returnUrl = process.env.VNP_RETURN_URL || `${base}/vnpay/return`;
+
+  const date = new Date();
+  const createDate = formatYMDHMS(date);
+  const ipAddr = (req.headers['x-forwarded-for'] as string) ||
+    (req as any).connection?.remoteAddress ||
+    (req as any).socket?.remoteAddress || '';
+
+  const bn = String(bankCode || '').trim();
   const lang = String(language || 'vn');
-  const desc = String(description || `Thanh toan don hang ${orderId || ''}`);
-  const logo = '/static/logo-vnpayqr.png';
-  const brand = '/static/brand-vban.png';
-  const flag = '/static/flag-en.png';
-  const qrImg = '/static/qr-vnpay.png';
-  const url = `${base}/vnpay/demo?orderId=${encodeURIComponent(orderId)}&amount=${encodeURIComponent(String(amt))}&bankCode=${encodeURIComponent(bn)}&language=${encodeURIComponent(lang)}&desc=${encodeURIComponent(desc)}&logo=${encodeURIComponent(logo)}&brand=${encodeURIComponent(brand)}&flag=${encodeURIComponent(flag)}&qrImg=${encodeURIComponent(qrImg)}`;
+  const desc = (String(description || '').trim() || `Thanh toan don hang ${orderId || ''}`);
+
+  const vnpParams: Record<string, string> = {
+    vnp_Version: '2.1.0',
+    vnp_Command: 'pay',
+    vnp_TmnCode: tmnCode,
+    vnp_Locale: lang || 'vn',
+    vnp_CurrCode: 'VND',
+    vnp_TxnRef: String(orderId),
+    vnp_OrderInfo: desc,
+    vnp_OrderType: 'other',
+    vnp_Amount: String(Math.round(amt * 100)),
+    vnp_ReturnUrl: returnUrl,
+    vnp_IpAddr: ipAddr,
+    vnp_CreateDate: createDate,
+  };
+  if (bn) vnpParams['vnp_BankCode'] = bn;
+
+  const url = buildVnpSignedUrl(vnpParams, secretKey, vnpUrl);
   const out = { url };
   appendLog({ route: '/vnpay/create', res: out });
   const now = new Date().toISOString();
-  upsertOrder({ id: String(orderId), amount: amt, desc, bankCode: bn, language: lang, status: 'created', createdAt: now, updatedAt: now });
+  upsertOrder({ id: String(orderId), amount: amt, desc, bankCode: bn || undefined, language: lang || undefined, status: 'created', createdAt: now, updatedAt: now });
   res.json(out);
 });
 
@@ -402,14 +461,21 @@ app.get('/vnpay/result', (req: Request, res: Response) => {
 });
 
 app.get('/vnpay/return', (req: Request, res: Response) => {
-  const orderId = String(req.query.orderId || '');
-  const code = String(req.query.vnp_ResponseCode || '');
-  appendLog({ route: '/vnpay/return', orderId, code });
+  const qp: any = req.query || {};
+  const orderId = String(qp.vnp_TxnRef || qp.orderId || '');
+  const code = String(qp.vnp_ResponseCode || '');
+  const rawAmount = String(qp.vnp_Amount || qp.amount || '');
+  let amount = '';
+  if (rawAmount) {
+    const n = Number(rawAmount);
+    amount = Number.isFinite(n) && n > 0 ? String(n / 100) : rawAmount;
+  }
+  appendLog({ route: '/vnpay/return', orderId, code, rawAmount });
   const params = new URLSearchParams({
     orderId,
     vnp_ResponseCode: code,
-    vnp_BankCode: String(req.query.vnp_BankCode || ''),
-    amount: String(req.query.amount || ''),
+    vnp_BankCode: String(qp.vnp_BankCode || ''),
+    amount,
   }).toString();
   try {
     const list = readOrders();

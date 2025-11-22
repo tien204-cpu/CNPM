@@ -87,7 +87,13 @@ function broadcast(orderId: string, event: string, data: any) {
 }
 async function setStatus(orderId: string, status: string) {
   const o = await prisma.order.update({ where: { id: orderId }, data: { status } });
-  broadcast(orderId, 'status', { id: orderId, status });
+  broadcast(orderId, 'status', {
+    id: orderId,
+    status,
+    droneName: (o as any).droneName,
+    droneSpeed: (o as any).droneSpeed,
+    deliveryTimeSeconds: (o as any).deliveryTimeSeconds,
+  });
   return o;
 }
 function randomMs(min: number, max: number) { return Math.floor(Math.random() * (max - min + 1)) + min }
@@ -101,6 +107,41 @@ function pseudoGeocode(address: string): { lat: number; lng: number } {
   const d1 = ((h % 1000) / 1000 - 0.5) * 0.08; // ~ +/- 0.04 deg
   const d2 = ((((h / 1000) >>> 0) % 1000) / 1000 - 0.5) * 0.08;
   return { lat: base.lat + d1, lng: base.lng + d2 };
+}
+
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371; // km
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const lat1 = a.lat * Math.PI / 180;
+  const lat2 = b.lat * Math.PI / 180;
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLng = Math.sin(dLng / 2);
+  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+function estimatePathDistanceKm(path: Array<{ lat: number; lng: number }>): number {
+  let sum = 0;
+  for (let i = 1; i < path.length; i++) {
+    sum += haversineKm(path[i - 1], path[i]);
+  }
+  return sum;
+}
+
+async function ensureDefaultDrones() {
+  try {
+    const count = await prisma.drone.count();
+    if (count > 0) return;
+    await prisma.drone.createMany({
+      data: [
+        { name: 'Drone 1', imageUrl: null, status: 'ready', isActive: true, speedKmh: 40 },
+        { name: 'Drone 2', imageUrl: null, status: 'ready', isActive: true, speedKmh: 40 },
+        { name: 'Drone 3', imageUrl: null, status: 'ready', isActive: true, speedKmh: 40 },
+      ],
+    });
+  } catch (e: any) {
+    try { appendLog({ action: 'seed-drones-error', error: e?.message || String(e) }); } catch {}
+  }
 }
 
 async function getRestaurantForOrder(orderId: string): Promise<{ lat: number; lng: number } | null> {
@@ -308,6 +349,81 @@ app.get('/orders/:id', async (req: any, res: any) => {
   res.json(o);
 });
 
+app.get('/drones', async (req: any, res: any) => {
+  try {
+    const where: any = {};
+    const q = (req.query?.active ?? req.query?.isActive) as string | undefined;
+    if (typeof q === 'string') {
+      const v = q.toLowerCase();
+      if (v === '1' || v === 'true' || v === 'yes') where.isActive = true;
+    }
+    const list = await prisma.drone.findMany({ where, orderBy: { name: 'asc' } });
+    res.json(list);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.post('/drones', async (req: any, res: any) => {
+  try {
+    const { name, imageUrl, speedKmh } = req.body || {};
+    if (!name || typeof name !== 'string') return res.status(400).json({ error: 'name required' });
+    const d = await prisma.drone.create({
+      data: {
+        name: name.trim(),
+        imageUrl: imageUrl || null,
+        speedKmh: typeof speedKmh === 'number' ? speedKmh : null,
+      }
+    });
+    res.json(d);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.patch('/drones/:id', async (req: any, res: any) => {
+  const id = req.params.id as string;
+  try {
+    const { name, imageUrl, speedKmh, status, isActive } = req.body || {};
+    const data: any = {};
+    if (typeof name === 'string') data.name = name;
+    if (typeof imageUrl === 'string') data.imageUrl = imageUrl;
+    if (typeof speedKmh === 'number') data.speedKmh = speedKmh;
+    if (typeof status === 'string') data.status = status;
+    if (typeof isActive === 'boolean') data.isActive = isActive;
+    const d = await prisma.drone.update({ where: { id }, data });
+    res.json(d);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.delete('/drones/:id', async (req: any, res: any) => {
+  const id = req.params.id as string;
+  try {
+    // Không cho xoá nếu drone đang được gán cho đơn hàng chưa giao xong
+    const active = await prisma.order.findFirst({
+      where: {
+        droneId: id,
+        status: { not: 'Đã giao đồ ăn tới nhà' },
+      },
+    });
+    if (active) {
+      return res.status(400).json({ error: 'Drone đang được sử dụng cho đơn hàng chưa hoàn tất' });
+    }
+
+    // Gỡ liên kết drone khỏi các đơn đã hoàn tất (nếu có) để tránh lỗi ràng buộc
+    try {
+      await prisma.order.updateMany({ where: { droneId: id }, data: { droneId: null } });
+    } catch {}
+
+    await prisma.drone.delete({ where: { id } });
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
 app.get('/orders/:id/events', async (req: any, res: any) => {
   const id = req.params.id as string;
   res.setHeader('Content-Type', 'text/event-stream');
@@ -321,7 +437,15 @@ app.get('/orders/:id/events', async (req: any, res: any) => {
   };
   req.on('close', onClose);
   const current = await prisma.order.findUnique({ where: { id } });
-  if (current) sendEvent(res, 'status', { id, status: current.status });
+  if (current) {
+    sendEvent(res, 'status', {
+      id,
+      status: current.status,
+      droneName: (current as any).droneName,
+      droneSpeed: (current as any).droneSpeed,
+      deliveryTimeSeconds: (current as any).deliveryTimeSeconds,
+    });
+  }
   // replay last known drone route/pos to newly connected client
   const last = lastDrone.get(id);
   if (last && last.path) {
@@ -334,12 +458,53 @@ app.get('/orders/:id/events', async (req: any, res: any) => {
   }
 });
 
+app.post('/orders/:id/drone/select', async (req: any, res: any) => {
+  const id = req.params.id as string;
+  const { droneId } = req.body || {};
+  if (!droneId || typeof droneId !== 'string') return res.status(400).json({ error: 'droneId required' });
+  try {
+    const [order, drone] = await Promise.all([
+      prisma.order.findUnique({ where: { id } }),
+      prisma.drone.findUnique({ where: { id: droneId } }),
+    ]);
+    if (!order) return res.status(404).json({ error: 'order not found' });
+    if (!drone) return res.status(404).json({ error: 'drone not found' });
+
+    // Enforce one active order per drone (not yet delivered)
+    const conflict = await prisma.order.findFirst({
+      where: {
+        droneId,
+        id: { not: id },
+        status: { not: 'Đã giao đồ ăn tới nhà' },
+      },
+    });
+    if (conflict) return res.status(400).json({ error: 'Drone đang được sử dụng cho đơn khác' });
+
+    const speed = typeof drone.speedKmh === 'number' ? drone.speedKmh : null;
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        drone: { connect: { id: drone.id } },
+        droneName: drone.name,
+        droneSpeed: speed,
+      },
+    });
+    try {
+      await prisma.drone.update({ where: { id: drone.id }, data: { status: 'waiting', isActive: true } });
+    } catch {}
+    res.json(updated);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
 // Arm the drone: move status to "Bắt đầu lấy đồ ăn", then after 20-30s to "Chuẩn bị giao hàng" unless already delivering/delivered
 app.post('/orders/:id/drone/arm', async (req: any, res: any) => {
   const id = req.params.id as string;
   try {
-    const order = await prisma.order.findUnique({ where: { id }, include: { items: true } });
+    const order = await prisma.order.findUnique({ where: { id }, include: { items: true, drone: true } });
     if (!order) return res.status(404).json({ error: 'not found' });
+    if (!order.droneId) return res.status(400).json({ error: 'drone_not_assigned' });
     if (order.status === 'Chuẩn bị giao hàng' || order.status === 'Đang giao đồ ăn bằng drone' || order.status === 'Đã giao đồ ăn tới nhà') {
       return res.json({ ok: true, status: order.status });
     }
@@ -395,8 +560,9 @@ app.post('/orders/:id/drone/arm', async (req: any, res: any) => {
 app.post('/orders/:id/drone/start', async (req: any, res: any) => {
   const id = req.params.id as string;
   try {
-    const order = await prisma.order.findUnique({ where: { id } });
+    const order = await prisma.order.findUnique({ where: { id }, include: { drone: true } });
     if (!order) return res.status(404).json({ error: 'not found' });
+    if (!order.droneId) return res.status(400).json({ error: 'drone_not_assigned' });
     // Cancel any pending arm timer so it won't overwrite delivering status
     if (armTimers.has(id)) { try { clearTimeout(armTimers.get(id)); } catch {} armTimers.delete(id); }
     // Pre-compute route immediately so client can see the path right away once starting delivery
@@ -417,6 +583,33 @@ app.post('/orders/:id/drone/start', async (req: any, res: any) => {
       lng: ((start as any).lng * (N - i) + end.lng * i) / N,
       t: i / N
     }));
+
+    // Estimate delivery time from path length and drone speed
+    let estSeconds: number | null = null;
+    try {
+      const simplePath = path.map(p => ({ lat: p.lat, lng: p.lng }));
+      const distKm = estimatePathDistanceKm(simplePath);
+      const speed = typeof ord?.drone?.speedKmh === 'number' && ord.drone.speedKmh! > 0 ? ord.drone.speedKmh! : 40;
+      if (distKm > 0 && speed > 0) {
+        estSeconds = Math.round((distKm / speed) * 3600);
+      }
+      if (estSeconds && order.droneId) {
+        try {
+          await prisma.order.update({
+            where: { id },
+            data: {
+              droneSpeed: speed,
+              deliveryTimeSeconds: estSeconds,
+              droneName: ord?.drone?.name || ord?.droneName || null,
+            },
+          });
+        } catch {}
+      }
+      if (order.droneId) {
+        try { await prisma.drone.update({ where: { id: order.droneId }, data: { status: 'in_use' } }); } catch {}
+      }
+    } catch {}
+
     const cur = lastDrone.get(id) || {} as any;
     cur.path = path; cur.start = start as any; cur.end = end; cur.lastPos = path[0]; cur.phase = 'delivery';
     lastDrone.set(id, cur);
@@ -454,6 +647,11 @@ app.patch('/orders/:id', async (req: any, res: any) => {
   if (!status) return res.status(400).json({ error: 'status required' });
   try {
     const o = await setStatus(id, status);
+    if (status === 'Đã giao đồ ăn tới nhà' && o?.droneId) {
+      try {
+        await prisma.drone.update({ where: { id: o.droneId as string }, data: { status: 'ready' } });
+      } catch {}
+    }
     res.json(o);
   } catch (e: any) {
     res.status(500).json({ error: e?.message || String(e) });
@@ -472,4 +670,7 @@ app.delete('/orders/:id', async (req: any, res: any) => {
   }
 });
 
-app.listen(PORT, () => console.log(`Order service running on ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Order service running on ${PORT}`);
+  ensureDefaultDrones().catch(() => {});
+});
