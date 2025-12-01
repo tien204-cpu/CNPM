@@ -56,10 +56,19 @@ function useAuth() {
           setRole(me.data.role || role)
           setEmail(me.data.email || email)
         }
-      } catch {}
+      } catch (e: any) {
+        if (e.response && e.response.status === 404) {
+          alert('Tài khoản không tồn tại')
+          localStorage.removeItem('ff_user')
+          window.location.href = '/'
+          return
+        }
+      }
       setReady(true)
     }
     verify()
+    const interval = setInterval(verify, 5000)
+    return () => clearInterval(interval)
   }, [token])
   return { token, role, email, ready }
 }
@@ -102,7 +111,7 @@ export function AdminProductCreate() {
     const description = descRef.current?.value?.trim() || ''
     const stock = Number(stockRef.current?.value || 100)
     const restaurantId = restRef.current?.value || ''
-    if (!name || !price) { alert('Vui lòng nhập tên và giá'); return }
+    if (!name || !price || !stock || !category || !restaurantId || !description) { alert('Vui lòng nhập đầy đủ thông tin'); return }
     try {
       const f = fileRef.current?.files && fileRef.current.files[0]
       if (f) {
@@ -150,12 +159,29 @@ export function AdminRestaurantCreate() {
   const [addr, setAddr] = useState('')
   const [lat, setLat] = useState('')
   const [lng, setLng] = useState('')
+  const [latError, setLatError] = useState('')
+  const [lngError, setLngError] = useState('')
+
   useEffect(() => { if (ready && role !== 'admin') { window.location.hash = '/' } }, [ready, role])
+  
   async function submit() {
     const payload: any = { name: name.trim(), address: addr.trim() }
+    
+    // Validation
+    let valid = true;
+    if (isNaN(Number(lat)) || /[a-zA-Z]/.test(lat)) { setLatError('Toạ độ không hợp lệ'); valid = false; }
+    else setLatError('');
+    
+    if (isNaN(Number(lng)) || /[a-zA-Z]/.test(lng)) { setLngError('Toạ độ không hợp lệ'); valid = false; }
+    else setLngError('');
+
+    if (!valid) return;
+
     const latV = parseFloat(lat); if (!isNaN(latV)) payload.lat = latV
     const lngV = parseFloat(lng); if (!isNaN(lngV)) payload.lng = lngV
-    if (!payload.name) { alert('Nhập tên'); return }
+    
+    if (!payload.name || !payload.address) { alert('Vui lòng nhập đầy đủ thông tin'); return }
+    
     await axios.post(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants`, payload)
     window.location.hash = '#/admin'
   }
@@ -166,8 +192,16 @@ export function AdminRestaurantCreate() {
         <div className="form-row"><label>Tên</label><input className="input" placeholder="Tên nhà hàng" value={name} onChange={e=>setName(e.target.value)} /></div>
         <div className="form-row"><label>Địa chỉ</label><input className="input" placeholder="Địa chỉ" value={addr} onChange={e=>setAddr(e.target.value)} /></div>
         <div className="form-row" style={{ display:'flex', gap:8 }}>
-          <div style={{ flex:1 }}><label>Lat</label><input className="input" placeholder="10.77" value={lat} onChange={e=>setLat(e.target.value)} /></div>
-          <div style={{ flex:1 }}><label>Lng</label><input className="input" placeholder="106.69" value={lng} onChange={e=>setLng(e.target.value)} /></div>
+          <div style={{ flex:1 }}>
+            <label>Lat</label>
+            <input className="input" placeholder="10.77" value={lat} onChange={e=>{setLat(e.target.value); setLatError('')}} />
+            {latError && <div style={{ color: 'red', fontSize: 12, marginTop: 4 }}>{latError}</div>}
+          </div>
+          <div style={{ flex:1 }}>
+            <label>Lng</label>
+            <input className="input" placeholder="106.69" value={lng} onChange={e=>{setLng(e.target.value); setLngError('')}} />
+            {lngError && <div style={{ color: 'red', fontSize: 12, marginTop: 4 }}>{lngError}</div>}
+          </div>
         </div>
         <div style={{ display:'flex', gap:8, marginTop:8 }}>
           <button className="btn" onClick={() => { window.location.hash = '#/admin' }}>Quay lại</button>
@@ -183,11 +217,34 @@ export function AdminDroneCreate() {
   const nameRef = useRef<HTMLInputElement>(null)
   const imgRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [speed, setSpeed] = useState('')
+  const [lat, setLat] = useState('')
+  const [lng, setLng] = useState('')
+  const [speedError, setSpeedError] = useState('')
+  const [latError, setLatError] = useState('')
+  const [lngError, setLngError] = useState('')
+
   useEffect(() => { if (ready && role !== 'admin') { window.location.hash = '/' } }, [ready, role])
+  
   async function submit() {
     const name = nameRef.current?.value?.trim() || ''
     let imageUrl = imgRef.current?.value?.trim() || ''
-    if (!name) { alert('Nhập tên drone'); return }
+    const battery = (document.getElementById('d-battery-create') as HTMLInputElement)?.value
+    
+    let valid = true;
+    const s = Number(speed);
+    if (isNaN(s) || s < 0 || s > 250) { setSpeedError('Tốc độ giới hạn từ 0 đến 250 km/h'); valid = false; }
+    else setSpeedError('');
+
+    if (isNaN(Number(lat)) || /[a-zA-Z]/.test(lat)) { setLatError('Toạ độ không hợp lệ'); valid = false; }
+    else setLatError('');
+
+    if (isNaN(Number(lng)) || /[a-zA-Z]/.test(lng)) { setLngError('Toạ độ không hợp lệ'); valid = false; }
+    else setLngError('');
+
+    if (!valid) return;
+
+    if (!name || !battery) { alert('Vui lòng nhập đầy đủ thông tin'); return }
     try {
       const f = fileRef.current?.files && fileRef.current.files[0]
       if (f) {
@@ -195,7 +252,14 @@ export function AdminDroneCreate() {
         if (up) imageUrl = up
       }
     } catch {}
-    await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/drones`, { name, imageUrl })
+    await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/drones`, { 
+        name, 
+        imageUrl, 
+        battery: Number(battery),
+        speedKmh: s,
+        lat: Number(lat),
+        lng: Number(lng)
+    })
     window.location.hash = '#/admin'
   }
   return (
@@ -203,6 +267,24 @@ export function AdminDroneCreate() {
       <h2>Thêm drone</h2>
       <div className="card">
         <div className="form-row"><label>Tên drone</label><input className="input" placeholder="Ví dụ: Drone A" ref={nameRef} /></div>
+        <div className="form-row"><label>Pin (%)</label><input className="input" placeholder="100" id="d-battery-create" /></div>
+        <div className="form-row">
+            <label>Tốc độ (km/h)</label>
+            <input className="input" placeholder="40" value={speed} onChange={e=>{setSpeed(e.target.value); setSpeedError('')}} />
+            {speedError && <div style={{ color: 'red', fontSize: 12, marginTop: 4 }}>{speedError}</div>}
+        </div>
+        <div className="form-row" style={{ display:'flex', gap:8 }}>
+          <div style={{ flex:1 }}>
+            <label>Lat</label>
+            <input className="input" placeholder="10.77" value={lat} onChange={e=>{setLat(e.target.value); setLatError('')}} />
+            {latError && <div style={{ color: 'red', fontSize: 12, marginTop: 4 }}>{latError}</div>}
+          </div>
+          <div style={{ flex:1 }}>
+            <label>Lng</label>
+            <input className="input" placeholder="106.69" value={lng} onChange={e=>{setLng(e.target.value); setLngError('')}} />
+            {lngError && <div style={{ color: 'red', fontSize: 12, marginTop: 4 }}>{lngError}</div>}
+          </div>
+        </div>
         <div className="form-row"><label>Ảnh (URL hoặc /images/...)</label><input className="input" placeholder="/images/drone.png" ref={imgRef} /></div>
         <div className="form-row"><label>Tải ảnh</label><input type="file" accept="image/*" ref={fileRef} /></div>
         <div style={{ display:'flex', gap:8, marginTop:8 }}>
@@ -233,6 +315,8 @@ export default function Admin() {
   const [oTotalPages, setOTotalPages] = useState<number>(1)
   const [armed, setArmed] = useState<Record<string, boolean>>({})
   const [editingDrone, setEditingDrone] = useState<any | null>(null)
+  const [editDroneSpeedError, setEditDroneSpeedError] = useState<string | null>(null)
+  const [editDroneLatError, setEditDroneLatError] = useState<string | null>(null)
 
   const pNameRef = useRef<HTMLInputElement>(null)
   const pPriceRef = useRef<HTMLInputElement>(null)
@@ -249,6 +333,23 @@ export default function Admin() {
   const rLatRef = useRef<HTMLInputElement>(null)
   const rLngRef = useRef<HTMLInputElement>(null)
   const cNameRef = useRef<HTMLInputElement>(null)
+
+  function isOrderActive(o: any) {
+    if (!o.droneId) return false
+    const s = String(o.status || '').toLowerCase()
+    // Statuses that are considered "finished" or "cancelled"
+    const finished = ['đã giao đồ ăn tới nhà', 'delivered', 'cancelled', 'huỷ', 'huy']
+    return !finished.includes(s)
+  }
+
+  function isOrderProtected(o: any) {
+    if (o.paymentMethod === 'VNPay') {
+        const s = String(o.status || '').toLowerCase()
+        if (s === 'đã giao đồ ăn tới nhà' || s === 'delivered') return false
+        return s !== 'pending_payment' && s !== 'cancelled' && s !== 'huỷ' && s !== 'huy';
+    }
+    return false;
+  }
 
   useEffect(() => {
     if (!ready) return
@@ -373,18 +474,28 @@ export default function Admin() {
   }
 
   async function updateProduct(p: any) {
-    const payload: any = {
-      name: val(`p-name-${p.id}`),
-      price: Number(val(`p-price-${p.id}`) || p.price),
-      category: val(`p-category-${p.id}`),
-      imageUrl: val(`p-image-${p.id}`),
-      description: val(`p-desc-${p.id}`),
-      stock: Number(val(`p-stock-${p.id}`) || p.stock),
+    const name = val(`p-name-${p.id}`).trim()
+    const price = val(`p-price-${p.id}`).trim()
+    const category = val(`p-category-${p.id}`).trim()
+    const description = val(`p-desc-${p.id}`).trim()
+    const stock = val(`p-stock-${p.id}`).trim()
+    const el = document.getElementById(`p-rest-${p.id}`) as HTMLSelectElement | null
+    const restaurantId = el ? el.value : ''
+
+    if (!name || !price || !category || !description || !stock || !restaurantId) {
+        alert('Vui lòng nhập đầy đủ thông tin');
+        return;
     }
-    try {
-      const el = document.getElementById(`p-rest-${p.id}`) as HTMLSelectElement | null
-      if (el) payload.restaurantId = el.value || null
-    } catch {}
+
+    const payload: any = {
+      name,
+      price: Number(price),
+      category,
+      imageUrl: val(`p-image-${p.id}`),
+      description,
+      stock: Number(stock),
+      restaurantId
+    }
     try {
       const f = fileOf(`p-file-${p.id}`)
       if (f) {
@@ -397,9 +508,21 @@ export default function Admin() {
   }
 
   async function deleteProduct(id: string) {
+    // Check if product is in any protected order (paid)
+    const protectedOrder = orders.find(o => isOrderProtected(o) && Array.isArray(o.items) && o.items.some((i: any) => i.productId === id))
+    if (protectedOrder) {
+        alert("Món ăn đang được đặt,không thể xoá!")
+        return
+    }
+
     if (!confirm('Xoá sản phẩm này?')) return
-    await axios.delete(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${id}`)
-    await refreshProducts()
+    try {
+      await axios.delete(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${id}`)
+      await refreshProducts()
+    } catch (e: any) {
+      const msg = (e as any)?.response?.data?.error || 'Xoá sản phẩm thất bại'
+      alert(msg)
+    }
   }
 
   async function changeUserRole(u: any, role: string) {
@@ -407,9 +530,12 @@ export default function Admin() {
     await refreshUsers()
   }
   async function updateUser(u: any) {
+    const email = val(`u-email-${u.id}`).trim()
+    const name = val(`u-name-${u.id}`).trim()
+    if (!email || !name) { alert('Vui lòng nhập đầy đủ thông tin'); return }
     const payload: any = {
-      email: val(`u-email-${u.id}`),
-      name: val(`u-name-${u.id}`),
+      email,
+      name,
     }
     const pw = val(`u-pass-${u.id}`)
     if (pw) payload.password = pw
@@ -425,8 +551,21 @@ export default function Admin() {
   async function updateOrderStatus(o: any, status: string) {
     await axios.patch(`${ORDER_BASE.replace(/\/$/, '')}/orders/${o.id}`, { status })
     await refreshOrders()
+    await refreshDrones()
   }
   async function deleteOrder(id: string) {
+    const o = orders.find(x => x.id === id)
+    if (!o) return
+
+    if (isOrderProtected(o)) {
+        alert("Đơn hàng đã được thanh toán,vui lòng giao hàng")
+        return
+    }
+
+    if (isOrderActive(o)) {
+        alert("Đơn hàng đang giao,không thể xoá!")
+        return
+    }
     if (!confirm('Xoá đơn hàng này?')) return
     await axios.delete(`${ORDER_BASE.replace(/\/$/, '')}/orders/${id}`)
     await refreshOrders()
@@ -459,17 +598,48 @@ export default function Admin() {
   }
 
   async function updateDrone(d: any) {
+    setEditDroneSpeedError(null)
+    setEditDroneLatError(null)
+
     const name = val('edit-d-name').trim()
     let imageUrl = val('edit-d-img').trim()
     const speedRaw = val('edit-d-speed').trim()
+    const batteryRaw = val('edit-d-battery').trim()
+    const latRaw = val('edit-d-lat').trim()
+    const lngRaw = val('edit-d-lng').trim()
+    const status = val('edit-d-status').trim()
+    
+    if (!name || !speedRaw || !batteryRaw || !latRaw || !lngRaw) {
+        alert('Vui lòng nhập đầy đủ thông tin');
+        return;
+    }
+
+    let hasError = false
+    const sp = parseFloat(speedRaw)
+    if (isNaN(sp) || sp < 0 || sp > 250) {
+        setEditDroneSpeedError('Tốc độ giới hạn từ 0 đến 250 km/h')
+        hasError = true
+    }
+
+    const lat = parseFloat(latRaw)
+    const lng = parseFloat(lngRaw)
+    if (isNaN(lat) || isNaN(lng) || !/^-?\d+(\.\d+)?$/.test(latRaw) || !/^-?\d+(\.\d+)?$/.test(lngRaw)) {
+        setEditDroneLatError('Toạ độ không hợp lệ')
+        hasError = true
+    }
+
+    if (hasError) return
+
     const payload: any = {}
     if (name) payload.name = name
+    if (status) payload.status = status
     if (imageUrl) payload.imageUrl = imageUrl
     else payload.imageUrl = null
-    if (speedRaw) {
-      const sp = parseFloat(speedRaw)
-      if (!isNaN(sp)) payload.speedKmh = sp
-    }
+    payload.speedKmh = sp
+    payload.battery = parseFloat(batteryRaw)
+    payload.lat = lat
+    payload.lng = lng
+
     try {
       const f = fileOf('edit-d-file')
       if (f) {
@@ -483,6 +653,11 @@ export default function Admin() {
   }
 
   async function deleteDrone(d: any) {
+    const active = orders.find(o => o.droneId === d.id && isOrderActive(o))
+    if (active) {
+        alert("Đang trong quá trình giao hàng,không thể xoá!")
+        return
+    }
     if (!confirm('Xoá drone này?')) return
     try {
       await axios.delete(`${ORDER_BASE.replace(/\/$/, '')}/drones/${d.id}`)
@@ -490,6 +665,25 @@ export default function Admin() {
     } catch (e: any) {
       const msg = (e as any)?.response?.data?.error || 'Xoá drone thất bại'
       alert(msg)
+    }
+  }
+
+  async function deleteRestaurant(r: any) {
+    const rProducts = products.filter(p => p.restaurantId === r.id).map(p => p.id)
+    // Check if restaurant is in any protected order (paid)
+    const protectedOrder = orders.find(o => isOrderProtected(o) && Array.isArray(o.items) && o.items.some((i: any) => rProducts.includes(i.productId)))
+    
+    if (protectedOrder) {
+        alert("Nhà hàng đang có đơn hàng,không thể xoá!")
+        return
+    }
+
+    if (!confirm('Xoá nhà hàng này?')) return
+    try {
+      await axios.delete(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${r.id}`)
+      await refreshRestaurants()
+    } catch (e: any) {
+      alert((e as any)?.response?.data?.error || 'Xoá nhà hàng thất bại')
     }
   }
 
@@ -687,6 +881,35 @@ export default function Admin() {
                             onChange={async e => {
                               const v = e.target.value
                               if (!v) { alert('Chọn drone cho đơn này'); return }
+                              
+                              const targetDrone = drones.find(d => d.id === v)
+                              if (targetDrone) {
+                                const s = String(targetDrone.status || '').toLowerCase()
+                                if (s === 'maintenance') {
+                                    alert("Drone đang bảo trì ,vui lòng chọn drone khác")
+                                    e.target.value = (o as any).droneId || ''
+                                    return
+                                }
+                                if (s === 'charging') {
+                                    alert("Drone đang sạc ,vui lòng chọn drone khác")
+                                    e.target.value = (o as any).droneId || ''
+                                    return
+                                }
+                              }
+
+                              const busyOrder = orders.find(x => x.droneId === v && x.id !== o.id && isOrderActive(x))
+                              if (busyOrder) {
+                                const busyDrone = drones.find(d => d.id === v)
+                                const s = String(busyDrone?.status || '').toLowerCase()
+                                if (s === 'in_use') {
+                                    alert("Drone đang được sử dụng ,vui lòng chọn drone khác")
+                                } else {
+                                    alert("Drone đang được chọn,vui lòng chọn drone khác")
+                                }
+                                e.target.value = (o as any).droneId || ''
+                                return
+                              }
+
                               try {
                                 await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/orders/${o.id}/drone/select`, { droneId: v })
                                 await refreshOrders()
@@ -757,6 +980,7 @@ export default function Admin() {
                   <th align="left">Drone</th>
                   <th align="left">Hình ảnh</th>
                   <th align="left">Trạng thái</th>
+                  <th align="left">Pin</th>
                   <th align="left">Hành động</th>
                 </tr>
               </thead>
@@ -778,8 +1002,10 @@ export default function Admin() {
                       <img src={droneImageSrc(d, idx)} style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6 }} />
                     </td>
                     <td>{d.status || ''}</td>
+                    <td>{(d as any).battery ?? 100}%</td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <button className="btn small" disabled={d.isActive} onClick={() => toggleDroneUsage(d, true)}>Sử dụng</button>
+                      <button className="btn small" onClick={async () => { try { await axios.post(`${ORDER_BASE.replace(/\/$/, '')}/drones/${d.id}/charge`); await refreshDrones(); } catch {} }}>Sạc</button>
+                      <button className="btn small" style={{ marginLeft: 6 }} disabled={d.isActive} onClick={() => toggleDroneUsage(d, true)}>Sử dụng</button>
                       <button className="btn small ghost" style={{ marginLeft: 6 }} disabled={!d.isActive || String(d.status || '').toLowerCase() === 'in_use'} onClick={() => toggleDroneUsage(d, false)}>Huỷ</button>
                       <button className="btn small" style={{ marginLeft: 6 }} onClick={() => setEditingDrone(d)}>Sửa</button>
                       <button className="btn small ghost" style={{ marginLeft: 6 }} onClick={() => deleteDrone(d)}>Xoá</button>
@@ -800,6 +1026,14 @@ export default function Admin() {
                   />
                 </div>
                 <div className="form-row">
+                  <label>Trạng thái</label>
+                  <select id="edit-d-status" className="input" defaultValue={editingDrone.status || 'ready'}>
+                    <option value="ready">Ready</option>
+                    <option value="maintenance">Maintenance</option>
+                    <option value="charging">Charging</option>
+                  </select>
+                </div>
+                <div className="form-row">
                   <label>Ảnh (URL hoặc /images/...)</label>
                   <input
                     id="edit-d-img"
@@ -816,13 +1050,30 @@ export default function Admin() {
                     defaultValue={editingDrone.speedKmh != null ? String(editingDrone.speedKmh) : ''}
                     placeholder="40"
                   />
+                  {editDroneSpeedError && <div className="error" style={{ color: 'red', fontSize: '0.9em', marginTop: 4 }}>{editDroneSpeedError}</div>}
+                </div>
+                <div className="form-row">
+                  <label>Pin (%)</label>
+                  <input
+                    id="edit-d-battery"
+                    className="input"
+                    defaultValue={editingDrone.battery != null ? String(editingDrone.battery) : '100'}
+                  />
+                </div>
+                <div className="form-row">
+                  <label>Toạ độ (Lat, Lng)</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input id="edit-d-lat" className="input" placeholder="Lat" defaultValue={editingDrone.lat != null ? String(editingDrone.lat) : ''} />
+                    <input id="edit-d-lng" className="input" placeholder="Lng" defaultValue={editingDrone.lng != null ? String(editingDrone.lng) : ''} />
+                  </div>
+                  {editDroneLatError && <div className="error" style={{ color: 'red', fontSize: '0.9em', marginTop: 4 }}>{editDroneLatError}</div>}
                 </div>
                 <div className="form-row">
                   <label>Tải ảnh</label>
                   <input id="edit-d-file" type="file" accept="image/*" />
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button className="btn" onClick={() => setEditingDrone(null)}>Huỷ</button>
+                  <button className="btn" onClick={() => { setEditingDrone(null); setEditDroneSpeedError(null); setEditDroneLatError(null); }}>Huỷ</button>
                   <button className="btn primary" onClick={() => editingDrone && updateDrone(editingDrone)}>Lưu</button>
                 </div>
               </div>
@@ -851,7 +1102,7 @@ export default function Admin() {
                       </td>
                       <td>
                         <button className="btn small" onClick={async () => { const payload: any = { name: val(`r-name-${r.id}`), address: val(`r-addr-${r.id}`) }; const latV = parseFloat(val(`r-lat-${r.id}`)); if (!isNaN(latV)) payload.lat = latV; const lngV = parseFloat(val(`r-lng-${r.id}`)); if (!isNaN(lngV)) payload.lng = lngV; await axios.put(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${r.id}`, payload); await refreshRestaurants(); }}>Lưu</button>
-                        <button className="btn small ghost" style={{ marginLeft:6 }} onClick={async () => { if (!confirm('Xoá nhà hàng này?')) return; await axios.delete(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${r.id}`); await refreshRestaurants(); }}>Xoá</button>
+                        <button className="btn small ghost" style={{ marginLeft:6 }} onClick={() => deleteRestaurant(r)}>Xoá</button>
                       </td>
                     </tr>
                   ))}

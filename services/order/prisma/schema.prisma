@@ -43,5 +43,8 @@ model Drone {
   status    String   @default("ready")
   isActive  Boolean  @default(false)
   speedKmh  Float?
+  battery   Float    @default(100)
+  lat       Float?
+  lng       Float?
   orders    Order[]
 }

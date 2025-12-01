@@ -57,6 +57,8 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState('')
   const [authPassword, setAuthPassword] = useState('')
   const [authError, setAuthError] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [phoneError, setPhoneError] = useState<string | null>(null)
   const [authName, setAuthName] = useState('')
   const [authPhone, setAuthPhone] = useState('')
   const [authAddress, setAuthAddress] = useState('')
@@ -82,7 +84,7 @@ export default function App() {
   const [shipLat, setShipLat] = useState<number | null>(null)
   const [shipLng, setShipLng] = useState<number | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'VNPay'>('COD')
-  const [vnpBank, setVnpBank] = useState<string>('VNPAYQR')
+  const [vnpBank, setVnpBank] = useState<string>('')
   const [vnpLocale, setVnpLocale] = useState<string>('vn')
   const [vnpDesc, setVnpDesc] = useState<string>('')
   const [lastOrder, setLastOrder] = useState<any>(null)
@@ -161,6 +163,23 @@ export default function App() {
       go('/admin')
     }
   }, [user, route])
+
+  useEffect(() => {
+    if (!user || !user.token) return
+    const check = async () => {
+      try {
+        await axios.get(`${USER_BASE.replace(/\/$/, '')}/me`, { headers: { Authorization: `Bearer ${user.token}` } })
+      } catch (e: any) {
+        if (e.response && e.response.status === 404) {
+          alert('Tài khoản không tồn tại')
+          logout()
+        }
+      }
+    }
+    check()
+    const interval = setInterval(check, 5000)
+    return () => clearInterval(interval)
+  }, [user])
 
   function slugify(name: string) {
     return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
@@ -386,6 +405,8 @@ export default function App() {
 
   async function submitAuth() {
     setAuthError(null)
+    setEmailError(null)
+    setPhoneError(null)
     try {
       const email = emailRef.current?.value || authEmail
       const pass = passwordRef.current?.value || authPassword
@@ -394,6 +415,17 @@ export default function App() {
       const address = addressRef.current?.value || authAddress
       if (authMode === 'register') {
         if (!email || !pass) { setAuthError('Vui lòng nhập email và mật khẩu'); return }
+        
+        // Validation
+        let hasError = false
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) { setEmailError('Email không hợp lệ'); hasError = true }
+
+        const phoneRegex = /^(\+?84|0)(3|5|7|8|9)[0-9]{8}$/;
+        if (phone && !phoneRegex.test(phone)) { setPhoneError('Số điện thoại không hợp lệ'); hasError = true }
+
+        if (hasError) return
+
         if (!agreeTerms) { setAuthError('Bạn phải đồng ý với các điều khoản'); return }
         await axios.post(`${USER_BASE.replace(/\/$/, '')}/register`, { email, password: pass, name })
       }
@@ -613,6 +645,7 @@ export default function App() {
             <div className="form-row">
               <label>Email</label>
               <input className="input" placeholder="email" type="email" name="email" inputMode="email" autoComplete={authMode === 'login' ? 'username' : 'email'} defaultValue={authEmail} ref={emailRef} />
+              {emailError && <div className="error" style={{ color: 'red', fontSize: '0.9em', marginTop: 4 }}>{emailError}</div>}
             </div>
           )}
           {authMode === 'register' && (
@@ -624,6 +657,7 @@ export default function App() {
               <div className="form-row">
                 <label>Số điện thoại</label>
                 <input className="input" placeholder="số điện thoại" type="tel" name="tel" inputMode="tel" autoComplete="tel" defaultValue={authPhone} ref={phoneRef} />
+                {phoneError && <div className="error" style={{ color: 'red', fontSize: '0.9em', marginTop: 4 }}>{phoneError}</div>}
               </div>
               <div className="form-row">
                 <label>Địa chỉ</label>
@@ -685,11 +719,68 @@ export default function App() {
 
   function BillPage({ id, vnpCode }: { id: string; vnpCode?: string | null }) {
     const [order, setOrder] = useState<any>(lastOrder && lastOrder?.id === id ? lastOrder : null)
+    const [cancelledReason, setCancelledReason] = useState<string | null>(null)
+
     useEffect(() => {
       if (!order && id) {
         axios.get(`${ORDER_BASE.replace(/\/$/, '')}/orders/${id}`).then(r => setOrder(r.data)).catch(() => {})
       }
     }, [id])
+
+    // Check for entity existence periodically
+    useEffect(() => {
+        if (!order) return;
+        const checkEntities = async () => {
+            try {
+                // Check Drone
+                if (order.droneId) {
+                    try {
+                        await axios.get(`${ORDER_BASE.replace(/\/$/, '')}/drones/${order.droneId}`);
+                    } catch (e: any) {
+                        if (e.response && e.response.status === 404) {
+                             setCancelledReason("Giao dịch bị huỷ do drone không tồn tại");
+                             return;
+                        }
+                    }
+                }
+
+                // Check Items (Products) & Restaurants
+                if (order.items && order.items.length > 0) {
+                    for (const item of order.items) {
+                        try {
+                            await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${item.productId}`);
+                        } catch (e: any) {
+                            if (e.response && e.response.status === 404) {
+                                setCancelledReason("Giao dịch bị huỷ do món ăn không tồn tại");
+                                return;
+                            }
+                        }
+                        
+                        try {
+                             const p = await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${item.productId}`);
+                             if (p.data && p.data.restaurantId) {
+                                 try {
+                                     await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${p.data.restaurantId}`);
+                                 } catch (e: any) {
+                                     if (e.response && e.response.status === 404) {
+                                         setCancelledReason("Giao dịch bị huỷ do nhà hàng không tồn tại");
+                                         return;
+                                     }
+                                 }
+                             }
+                        } catch {}
+                    }
+                }
+            } catch (err) {
+                console.error("Entity check failed", err);
+            }
+        };
+        
+        const interval = setInterval(checkEntities, 3000); // Check every 3 seconds
+        checkEntities();
+        return () => clearInterval(interval);
+    }, [order]);
+
     useEffect(() => {
       if (!id) return
       let es: EventSource | null = null
@@ -710,7 +801,16 @@ export default function App() {
     const isVnpSuccess = vnpCode === '00'
     const isVnpFail = !!vnpCode && vnpCode !== '00'
     return (
-      <div className="page">
+      <div className="page" style={cancelledReason ? { position: 'relative', overflow: 'hidden' } : {}}>
+        {cancelledReason && (
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(255,255,255,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="card" style={{ padding: 30, textAlign: 'center', border: '1px solid red' }}>
+                    <h3>{cancelledReason}</h3>
+                    <button className="btn primary" onClick={() => window.location.hash = '/'}>Quay về trang chủ</button>
+                </div>
+            </div>
+        )}
+        <div style={cancelledReason ? { filter: 'blur(4px)', pointerEvents: 'none' } : {}}>
         <h2>Hóa đơn</h2>
         <div className="card">
           {vnpCode && (
@@ -764,6 +864,7 @@ export default function App() {
             <a className="btn primary" href={`#/track/${id}`}>Theo dõi đơn hàng</a>
             <a className="btn ghost" href="#/history">Lịch sử</a>
           </div>
+        </div>
         </div>
       </div>
     )
@@ -870,12 +971,83 @@ export default function App() {
 
   function TrackPage({ id }: { id: string }) {
     const [order, setOrder] = useState<any>(null)
+    const [cancelledReason, setCancelledReason] = useState<string | null>(null)
+
     const mapRef = useRef<any>(null)
     const markerRef = useRef<any>(null)
     const routeRef = useRef<any>(null)
     const stopMarkersRef = useRef<any[]>([])
     const stopsDataRef = useRef<Array<{ lat:number; lng:number; name?: string; address?: string }>>([])
     const shownStopsRef = useRef<Set<number>>(new Set())
+    
+    // Check for entity existence periodically
+    useEffect(() => {
+        if (!order) return;
+        const checkEntities = async () => {
+            // Nếu đã thanh toán (VNPay và không phải pending/cancelled), bỏ qua kiểm tra huỷ
+            const isPaid = order.paymentMethod === 'VNPay' && order.status !== 'pending_payment' && order.status !== 'cancelled' && order.status !== 'huỷ' && order.status !== 'huy';
+            if (isPaid) return;
+
+            try {
+                // Check Drone
+                if (order.droneId) {
+                    try {
+                        await axios.get(`${ORDER_BASE.replace(/\/$/, '')}/drones/${order.droneId}`);
+                    } catch (e: any) {
+                        if (e.response && e.response.status === 404) {
+                             setCancelledReason("Giao dịch bị huỷ do drone không tồn tại");
+                             return;
+                        }
+                    }
+                }
+
+                // Check Items (Products) & Restaurants
+                if (order.items && order.items.length > 0) {
+                    const isVNPay = order.paymentMethod === 'VNPay';
+                    const refundMsg = isVNPay ? '.Hệ thống sẽ tự động hoàn tiền' : '';
+
+                    for (const item of order.items) {
+                        try {
+                            await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${item.productId}`);
+                        } catch (e: any) {
+                            if (e.response && e.response.status === 404) {
+                                setCancelledReason(`Giao dịch bị huỷ do món ăn không tồn tại${refundMsg}`);
+                                return;
+                            }
+                        }
+                        
+                        // Check Restaurant of the product
+                        // We need to know the restaurant ID. We can get it from product details.
+                        try {
+                             const p = await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${item.productId}`);
+                             // If product exists but has no restaurantId, it means restaurant was deleted (orphaned product)
+                             if (p.data && !p.data.restaurantId) {
+                                 setCancelledReason(`Giao dịch bị huỷ do nhà hàng không tồn tại${refundMsg}`);
+                                 return;
+                             }
+                             if (p.data && p.data.restaurantId) {
+                                 try {
+                                     await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${p.data.restaurantId}`);
+                                 } catch (e: any) {
+                                     if (e.response && e.response.status === 404) {
+                                         setCancelledReason(`Giao dịch bị huỷ do nhà hàng không tồn tại${refundMsg}`);
+                                         return;
+                                     }
+                                 }
+                             }
+                        } catch {}
+                    }
+                }
+            } catch (err) {
+                console.error("Entity check failed", err);
+            }
+        };
+        
+        const interval = setInterval(checkEntities, 3000); // Check every 3 seconds
+        checkEntities();
+        return () => clearInterval(interval);
+    }, [order]);
+
     useEffect(() => {
       // init map immediately so user sees base map even before route events
       try {
@@ -982,7 +1154,16 @@ export default function App() {
       return () => { try { es && es.close() } catch {} }
     }, [id])
     return (
-      <div className="page">
+      <div className="page" style={cancelledReason ? { position: 'relative', overflow: 'hidden' } : {}}>
+        {cancelledReason && (
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(255,255,255,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="card" style={{ padding: 30, textAlign: 'center', border: '1px solid red' }}>
+                    <h3>{cancelledReason}</h3>
+                    <button className="btn primary" onClick={() => window.location.hash = '/'}>Quay về trang chủ</button>
+                </div>
+            </div>
+        )}
+        <div style={cancelledReason ? { filter: 'blur(4px)', pointerEvents: 'none' } : {}}>
         <h2>Theo dõi đơn hàng</h2>
         <div className="card">
           <div id="trackmap" style={{ width:'100%', height: 360, borderRadius: 12 }} />
@@ -1003,6 +1184,7 @@ export default function App() {
           <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
             <a className="btn ghost" href={`#/bill/${id}`}>Xem hoá đơn</a>
           </div>
+        </div>
         </div>
       </div>
     )
@@ -1113,6 +1295,37 @@ export default function App() {
   }
 
   function CheckoutPage() {
+    const [cancelledReason, setCancelledReason] = useState<string | null>(null)
+    useEffect(() => {
+      const timer = setInterval(async () => {
+        if (cart.length === 0) return
+        try {
+          await Promise.all(cart.map(async (item) => {
+            try {
+              const pRes = await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${item.productId}`)
+              const product = pRes.data
+              // If product exists but has no restaurantId, it means restaurant was deleted
+              if (!product.restaurantId) throw new Error('Nhà hàng không tồn tại')
+              
+              if (product.restaurantId) {
+                try {
+                  await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${product.restaurantId}`)
+                } catch (e: any) {
+                  if (e.response && e.response.status === 404) throw new Error('Nhà hàng không tồn tại')
+                }
+              }
+            } catch (e: any) {
+              if (e.message === 'Nhà hàng không tồn tại') throw e
+              if (e.response && e.response.status === 404) throw new Error('Món ăn không tồn tại')
+            }
+          }))
+        } catch (e: any) {
+          setCancelledReason(e.message)
+        }
+      }, 3000)
+      return () => clearInterval(timer)
+    }, [cart])
+
     const mapRef = useRef<any>(null)
     const markerRef = useRef<any>(null)
     const [geoLoading, setGeoLoading] = useState(false)
@@ -1148,6 +1361,7 @@ export default function App() {
             style: `https://maps.track-asia.com/styles/v2/streets.json?key=${encodeURIComponent(TRACKASIA_KEY || 'a8da2e51d0a720ef81a1762860280f15fa')}`,
             center,
             zoom: hasLL ? 16 : 13
+
           })
           mapRef.current.on('click', (ev: any) => {
             try {
@@ -1176,6 +1390,16 @@ export default function App() {
 
     return (
       <div className="page">
+        {cancelledReason && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <h3 className="text-danger">Giao dịch bị hủy</h3>
+              <p>{cancelledReason}</p>
+              <a href="#/" className="btn primary">Về trang chủ</a>
+            </div>
+          </div>
+        )}
+        <div style={cancelledReason ? { filter: 'blur(4px)', pointerEvents: 'none' } : {}}>
         <h2>Thanh toán</h2>
         <div className="card">
           <div>Tạm tính: ${subtotal.toFixed(2)}</div>
@@ -1225,6 +1449,7 @@ export default function App() {
           <div style={{ marginTop: 12 }}>
             <button className="btn primary" onClick={place} disabled={cart.length === 0}>Đặt hàng</button>
           </div>
+        </div>
         </div>
       </div>
     )

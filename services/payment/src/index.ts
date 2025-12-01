@@ -125,8 +125,8 @@ app.post('/pay', (req: Request, res: Response) => {
 app.post('/vnpay/create', (req: Request, res: Response) => {
   const { amount, orderId, bankCode, language, description } = req.body as any;
   appendLog({ route: '/vnpay/create', req: { amount, orderId, bankCode, language } });
-  const amt = Number(amount);
-  if (!orderId || !Number.isFinite(amt) || amt <= 0) {
+  const amtUsd = Number(amount);
+  if (!orderId || !Number.isFinite(amtUsd) || amtUsd <= 0) {
     const out = { error: 'invalid amount or orderId' };
     appendLog({ route: '/vnpay/create', res: out });
     return res.status(400).json(out);
@@ -155,6 +155,9 @@ app.post('/vnpay/create', (req: Request, res: Response) => {
   const bn = String(bankCode || '').trim();
   const lang = String(language || 'vn');
   const desc = (String(description || '').trim() || `Thanh toan don hang ${orderId || ''}`);
+  const rateEnv = Number(process.env.USD_TO_VND_RATE || '25000');
+  const usdToVnd = Number.isFinite(rateEnv) && rateEnv > 0 ? rateEnv : 25000;
+  const amtVnd = Math.round(amtUsd * usdToVnd);
 
   const vnpParams: Record<string, string> = {
     vnp_Version: '2.1.0',
@@ -165,7 +168,7 @@ app.post('/vnpay/create', (req: Request, res: Response) => {
     vnp_TxnRef: String(orderId),
     vnp_OrderInfo: desc,
     vnp_OrderType: 'other',
-    vnp_Amount: String(Math.round(amt * 100)),
+    vnp_Amount: String(amtVnd * 100),
     vnp_ReturnUrl: returnUrl,
     vnp_IpAddr: ipAddr,
     vnp_CreateDate: createDate,
@@ -174,9 +177,9 @@ app.post('/vnpay/create', (req: Request, res: Response) => {
 
   const url = buildVnpSignedUrl(vnpParams, secretKey, vnpUrl);
   const out = { url };
-  appendLog({ route: '/vnpay/create', res: out });
+  appendLog({ route: '/vnpay/create', res: { ...out, amountUsd: amtUsd, amountVnd: amtVnd, rate: usdToVnd } });
   const now = new Date().toISOString();
-  upsertOrder({ id: String(orderId), amount: amt, desc, bankCode: bn || undefined, language: lang || undefined, status: 'created', createdAt: now, updatedAt: now });
+  upsertOrder({ id: String(orderId), amount: amtVnd, desc, bankCode: bn || undefined, language: lang || undefined, status: 'created', createdAt: now, updatedAt: now });
   res.json(out);
 });
 

@@ -58,11 +58,12 @@ services:
     build: ./services/payment
     environment:
       PORT: 3004
-      VNP_TMN_CODE: "YOUR_TMN_CODE"        # mã website test do VNPay cấp
-      VNP_HASH_SECRET: "YOUR_HASH_SECRET"  # secret key do VNPay cấp
+      VNP_TMN_CODE: "MGGSDF52"        # mã website test do VNPay cấp
+      VNP_HASH_SECRET: "AGWYEAZUADNU05SZ0UF58INWW0VENF4P"  # secret key do VNPay cấp
       VNP_URL: "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
       VNP_RETURN_URL: "http://192.168.2.22:3004/vnpay/return"   # hoặc domain public của bạn
       FRONTEND_URL: "http://192.168.2.22:5173"
+      USD_TO_VND_RATE: "25000"
     ports:
       - "3004:3004"
 
@@ -82,6 +83,7 @@ services:
         VITE_PRODUCT_BASE: http://192.168.2.22:3002
         VITE_USER_BASE: http://192.168.2.22:3001
         VITE_ORDER_BASE: http://192.168.2.22:3003
+        VITE_PAYMENT_BASE: http://192.168.2.22:3004
         VITE_TRACKASIA_KEY: a8da2e51d0a720ef81a1762860280f15fa
     depends_on:
       - product

@@ -143,8 +143,19 @@ app.patch('/users/:id', auth, requireAdmin, async (req: Request, res: Response) 
 
 app.delete('/users/:id', auth, requireAdmin, async (req: Request, res: Response) => {
   const id = (req.params as any).id as string;
-  await prisma.user.delete({ where: { id } });
-  res.json({ ok: true });
+  try {
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (user && user.role === 'admin') {
+      const count = await prisma.user.count({ where: { role: 'admin' } });
+      if (count <= 1) {
+        return res.status(400).json({ error: 'Không thể xoá tài khoản admin cuối cùng' });
+      }
+    }
+    await prisma.user.delete({ where: { id } });
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
 });
 
 ensureAdmin().then(() => console.log('Admin account ensured')).catch(() => {});

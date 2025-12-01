@@ -134,9 +134,9 @@ async function ensureDefaultDrones() {
     if (count > 0) return;
     await prisma.drone.createMany({
       data: [
-        { name: 'Drone 1', imageUrl: null, status: 'ready', isActive: true, speedKmh: 40 },
-        { name: 'Drone 2', imageUrl: null, status: 'ready', isActive: true, speedKmh: 40 },
-        { name: 'Drone 3', imageUrl: null, status: 'ready', isActive: true, speedKmh: 40 },
+        { name: 'Drone 1', imageUrl: null, status: 'ready', isActive: true, speedKmh: 40, battery: 100, lat: 10.776889, lng: 106.700806 },
+        { name: 'Drone 2', imageUrl: null, status: 'ready', isActive: true, speedKmh: 40, battery: 100, lat: 10.776889, lng: 106.700806 },
+        { name: 'Drone 3', imageUrl: null, status: 'ready', isActive: true, speedKmh: 40, battery: 100, lat: 10.776889, lng: 106.700806 },
       ],
     });
   } catch (e: any) {
@@ -196,7 +196,8 @@ app.post('/orders', async (req: any, res: any) => {
       const r: any = await axiosWithRetry('get', `${PRODUCT_URL}/products/${it.productId}`);
       const product = r.data;
       if (!product) return res.status(502).json({ error: `product service returned empty for ${it.productId}` });
-      if (product.stock < it.qty) return res.status(400).json({ error: `insufficient stock for ${product.name}` });
+      if (product.stock === 0) return res.status(400).json({ error: 'số lượng đã hết vui lòng đạt món khác' });
+      if (product.stock < it.qty) return res.status(400).json({ error: 'không đủ hàng,vui lòng điều chỉnh số lượng' });
       total += product.price * it.qty;
     }
 
@@ -366,13 +367,16 @@ app.get('/drones', async (req: any, res: any) => {
 
 app.post('/drones', async (req: any, res: any) => {
   try {
-    const { name, imageUrl, speedKmh } = req.body || {};
+    const { name, imageUrl, speedKmh, battery, lat, lng } = req.body || {};
     if (!name || typeof name !== 'string') return res.status(400).json({ error: 'name required' });
     const d = await prisma.drone.create({
       data: {
         name: name.trim(),
         imageUrl: imageUrl || null,
         speedKmh: typeof speedKmh === 'number' ? speedKmh : null,
+        battery: typeof battery === 'number' ? battery : 100,
+        lat: typeof lat === 'number' ? lat : null,
+        lng: typeof lng === 'number' ? lng : null,
       }
     });
     res.json(d);
@@ -384,13 +388,16 @@ app.post('/drones', async (req: any, res: any) => {
 app.patch('/drones/:id', async (req: any, res: any) => {
   const id = req.params.id as string;
   try {
-    const { name, imageUrl, speedKmh, status, isActive } = req.body || {};
+    const { name, imageUrl, speedKmh, status, isActive, battery, lat, lng } = req.body || {};
     const data: any = {};
     if (typeof name === 'string') data.name = name;
     if (typeof imageUrl === 'string') data.imageUrl = imageUrl;
     if (typeof speedKmh === 'number') data.speedKmh = speedKmh;
     if (typeof status === 'string') data.status = status;
     if (typeof isActive === 'boolean') data.isActive = isActive;
+    if (typeof battery === 'number') data.battery = battery;
+    if (typeof lat === 'number') data.lat = lat;
+    if (typeof lng === 'number') data.lng = lng;
     const d = await prisma.drone.update({ where: { id }, data });
     res.json(d);
   } catch (e: any) {
@@ -398,21 +405,85 @@ app.patch('/drones/:id', async (req: any, res: any) => {
   }
 });
 
+app.post('/drones/:id/charge', async (req: any, res: any) => {
+  const id = req.params.id as string;
+  try {
+    const d = await prisma.drone.update({ where: { id }, data: { battery: 100 } });
+    res.json(d);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.delete('/drones/:id', async (req: any, res: any) => {
+  try {
+    const id = req.params.id;
+    // Check if drone is used in any paid order (not COD)
+    const paidOrders = await prisma.order.count({
+      where: {
+        droneId: id,
+        paymentMethod: { not: 'COD' }
+      }
+    });
+
+    if (paidOrders > 0) {
+        return res.status(400).json({ error: 'Không thể xoá drone đã có giao dịch thanh toán' });
+    }
+
+    await prisma.drone.delete({ where: { id } });
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.post('/orders/check-products', async (req: any, res: any) => {
+    const { productIds } = req.body; 
+    if (!productIds || !Array.isArray(productIds)) return res.status(400).json({ error: 'productIds required' });
+
+    try {
+      // Check for orders that are in active delivery phase
+      // Statuses: 'Bắt đầu lấy đồ ăn', 'Chuẩn bị giao hàng', 'Đang giao đồ ăn bằng drone'
+      // 'Điều drone tới nhà hàng' is initial state, maybe cancellable?
+      // User requirement: "khi đã bấm drone giao hàng ... thì ... ko thể bị xoá"
+      // "Bấm drone giao hàng" triggers /drone/start which sets status 'Đang giao đồ ăn bằng drone'
+      // But /drone/arm sets 'Bắt đầu lấy đồ ăn' -> 'Chuẩn bị giao hàng'
+      // Let's protect all statuses that imply drone activity or delivery in progress
+      
+      const activeStatuses = ['Bắt đầu lấy đồ ăn', 'Chuẩn bị giao hàng', 'Đang giao đồ ăn bằng drone'];
+      
+      const count = await prisma.orderItem.count({
+          where: {
+              productId: { in: productIds },
+              order: {
+                  status: { in: activeStatuses }
+              }
+          }
+      });
+      res.json({ hasPaidOrders: count > 0 });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || String(e) });
+    }
+});
+
 app.delete('/drones/:id', async (req: any, res: any) => {
   const id = req.params.id as string;
   try {
-    // Không cho xoá nếu drone đang được gán cho đơn hàng chưa giao xong
+    // Không cho xoá nếu drone đang được gán cho đơn hàng đang giao (active delivery)
+    // Statuses: 'Bắt đầu lấy đồ ăn', 'Chuẩn bị giao hàng', 'Đang giao đồ ăn bằng drone'
+    const activeStatuses = ['Bắt đầu lấy đồ ăn', 'Chuẩn bị giao hàng', 'Đang giao đồ ăn bằng drone'];
+    
     const active = await prisma.order.findFirst({
       where: {
         droneId: id,
-        status: { not: 'Đã giao đồ ăn tới nhà' },
+        status: { in: activeStatuses },
       },
     });
     if (active) {
-      return res.status(400).json({ error: 'Drone đang được sử dụng cho đơn hàng chưa hoàn tất' });
+      return res.status(400).json({ error: 'Drone đang giao hàng, không thể xoá' });
     }
 
-    // Gỡ liên kết drone khỏi các đơn đã hoàn tất (nếu có) để tránh lỗi ràng buộc
+    // Gỡ liên kết drone khỏi các đơn đã hoàn tất hoặc chưa giao (nếu có) để tránh lỗi ràng buộc
     try {
       await prisma.order.updateMany({ where: { droneId: id }, data: { droneId: null } });
     } catch {}
@@ -480,6 +551,16 @@ app.post('/orders/:id/drone/select', async (req: any, res: any) => {
     });
     if (conflict) return res.status(400).json({ error: 'Drone đang được sử dụng cho đơn khác' });
 
+    // If order had a previous drone and it was waiting, set it to ready
+    if (order.droneId && order.droneId !== droneId) {
+        try {
+            const oldDrone = await prisma.drone.findUnique({ where: { id: order.droneId } });
+            if (oldDrone && oldDrone.status === 'waiting') {
+                await prisma.drone.update({ where: { id: oldDrone.id }, data: { status: 'ready' } });
+            }
+        } catch {}
+    }
+
     const speed = typeof drone.speedKmh === 'number' ? drone.speedKmh : null;
     const updated = await prisma.order.update({
       where: { id },
@@ -510,15 +591,29 @@ app.post('/orders/:id/drone/arm', async (req: any, res: any) => {
     }
     if (order.status === 'Điều drone tới nhà hàng') {
       await setStatus(id, 'Bắt đầu lấy đồ ăn');
+      // Drone starts flying to pickup -> set status to in_use
+      if (order.droneId) {
+        try { await prisma.drone.update({ where: { id: order.droneId }, data: { status: 'in_use' } }); } catch {}
+      }
     }
     if (armTimers.has(id)) { try { clearTimeout(armTimers.get(id)); } catch {} armTimers.delete(id); }
 
     // Build pickup route across all restaurants in the order
     const rests = await getRestaurantsForOrder(id);
     let points: Array<{ lat: number; lng: number }> = [];
+
+    // Get drone start position
+    let droneStart: { lat: number; lng: number } | null = null;
+    if (order.droneId) {
+        const d = await prisma.drone.findUnique({ where: { id: order.droneId } });
+        if (d && typeof d.lat === 'number' && typeof d.lng === 'number') {
+            droneStart = { lat: d.lat, lng: d.lng };
+        }
+    }
+
     for (let i = 0; i < rests.length; i++) {
       const cur = { lat: rests[i].lat, lng: rests[i].lng };
-      const prev = i === 0 ? cur : { lat: rests[i - 1].lat, lng: rests[i - 1].lng };
+      const prev = i === 0 ? (droneStart || cur) : { lat: rests[i - 1].lat, lng: rests[i - 1].lng };
       const segN = 30;
       for (let k = 0; k <= segN; k++) {
         const t = k / segN;
@@ -543,6 +638,17 @@ app.post('/orders/:id/drone/arm', async (req: any, res: any) => {
         return;
       }
       const p = path[idx++];
+      
+      // Consume battery
+      if (idx % 10 === 0 && order.droneId) {
+        try {
+          await prisma.drone.update({
+            where: { id: order.droneId },
+            data: { battery: { decrement: 1 } }
+          });
+        } catch {}
+      }
+
       const last = lastDrone.get(id) || {} as any;
       last.lastPos = p; if (!last.path) last.path = path; if (!last.stops) last.stops = stops; last.phase = 'pickup';
       lastDrone.set(id, last);
@@ -618,12 +724,23 @@ app.post('/orders/:id/drone/start', async (req: any, res: any) => {
     // begin moving -> set to Đang giao ngay khi bấm bắt đầu
     await setStatus(id, 'Đang giao đồ ăn bằng drone');
     let idx = 0;
-    const tick = () => {
+    const tick = async () => {
       if (idx >= path.length) {
         broadcast(id, 'drone', { type: 'arrived', at: end });
         return;
       }
       const p = path[idx++];
+
+      // Consume battery
+      if (idx % 10 === 0 && order.droneId) {
+        try {
+          await prisma.drone.update({
+            where: { id: order.droneId },
+            data: { battery: { decrement: 1 } }
+          });
+        } catch {}
+      }
+
       // update last position and broadcast
       const last = lastDrone.get(id) || {} as any;
       last.lastPos = p;
@@ -661,10 +778,28 @@ app.patch('/orders/:id', async (req: any, res: any) => {
 app.delete('/orders/:id', async (req: any, res: any) => {
   const id = req.params.id as string;
   try {
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (order) {
+      const activeStatuses = ['Bắt đầu lấy đồ ăn', 'Chuẩn bị giao hàng', 'Đang giao đồ ăn bằng drone'];
+      if (activeStatuses.includes(order.status)) {
+        return res.status(400).json({ error: 'Không thể xoá đơn hàng đang trong quá trình giao' });
+      }
+    }
     await prisma.orderItem.deleteMany({ where: { orderId: id } });
     await prisma.order.delete({ where: { id } });
     broadcast(id, 'deleted', { id });
     res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.get('/drones/:id', async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const drone = await prisma.drone.findUnique({ where: { id } });
+    if (!drone) return res.status(404).json({ error: 'Drone not found' });
+    res.json(drone);
   } catch (e: any) {
     res.status(500).json({ error: e?.message || String(e) });
   }

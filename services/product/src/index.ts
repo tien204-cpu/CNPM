@@ -84,6 +84,18 @@ app.put('/restaurants/:id', async (req: Request, res: Response) => {
 });
 app.delete('/restaurants/:id', async (req: Request, res: Response) => {
   try {
+    const id = req.params.id;
+    // Check if restaurant has products
+    const products = await prisma.product.findMany({ where: { restaurantId: id }, select: { id: true } });
+    if (products.length > 0) {
+        // Unlink products from this restaurant so they don't block deletion (or get deleted if cascade was set)
+        // We set restaurantId to null. The frontend will detect this as "Restaurant not found" for active orders.
+        await prisma.product.updateMany({
+            where: { restaurantId: id },
+            data: { restaurantId: null }
+        });
+    }
+
     await prisma.restaurant.delete({ where: { id: req.params.id } });
     res.json({ ok: true });
   } catch (e: any) { res.status(500).json({ error: e?.message || String(e) }); }
@@ -119,6 +131,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 const PORT = process.env.PORT || 3002;
+const ORDER_URL = process.env.ORDER_URL || 'http://order:3003';
 const prisma = new PrismaClient();
 const LOG_PATH = process.env.DEBUG_LOG_PATH || '/tmp/product-debug.log';
 const IMAGES_DIR = process.env.IMAGES_DIR || '/images';
@@ -352,6 +365,21 @@ app.put('/products/:id', async (req: Request, res: Response) => {
 app.delete('/products/:id', async (req: Request, res: Response) => {
   const id = req.params.id
   try {
+    // Check if product is in active delivery orders
+    try {
+        const check: any = await fetch(`${ORDER_URL}/orders/check-products`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productIds: [id] })
+        }).then(r => r.json());
+        
+        if (check && check.hasPaidOrders) {
+            return res.status(400).json({ error: 'Món ăn đang được giao, không thể xoá' });
+        }
+    } catch (err) {
+        console.error('Failed to check orders', err);
+    }
+
     await prisma.product.delete({ where: { id } })
     res.json({ ok: true })
   } catch (e: any) {
