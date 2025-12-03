@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    services: {}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU and buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and start Docker Compose
+        run: |
+          docker compose up --build -d
+
+      - name: Wait for DB
+        run: |
+          # wait for postgres to be ready
+          for i in {1..30}; do
+            docker compose exec -T db pg_isready -U postgres && break || sleep 2
+          done
+
+      - name: Apply Prisma schema (user/product/order)
+        run: |
+          # ensure each service has the expected tables before running tests
+          docker compose exec -T user npx prisma db push --accept-data-loss || true
+          docker compose exec -T product npx prisma db push --accept-data-loss || true
+          docker compose exec -T order npx prisma db push --accept-data-loss || true
+
+      - name: Seed product data
+        run: |
+          # call the product service /seed endpoint to populate sample products
+          # use a short wait loop to wait until product service is reachable
+          for i in {1..20}; do
+            if curl -sS --fail http://localhost:3002/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          # try /seed (some images of product service expose /seed as POST)
+          curl -sS -X POST http://localhost:3002/seed || true
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: Run smoke tests
+        run: node ./scripts/smoke-test.js
+
+      - name: Install Playwright browsers
+        run: npx --yes --prefix frontend playwright install --with-deps
+
+      - name: Run Playwright e2e (with traces)
+        run: |
+          APP_URL=http://localhost:5173 npx --prefix frontend playwright test --config=frontend/playwright.config.js --reporter=list --trace on
+
+      - name: Upload Playwright artifacts (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            test-results
+            frontend/test-results
+            playwright-report
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  typecheck:
+    name: Typecheck (TS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install root deps
+        run: npm ci
+      - name: Run typechecks
+        run: npm run check
+
+  smoke:
+    name: Smoke test (Docker Compose)
+    runs-on: ubuntu-latest
+    needs: typecheck
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Start services and run smoke-test
+        run: |
+          docker compose up -d --build
+          node ./scripts/smoke-test-retry.js
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres

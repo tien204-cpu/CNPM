@@ -1,0 +1,96 @@
+services:
+  db:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: foodfast
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+
+
+  user:
+    build: ./services/user
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/foodfast?schema=user
+      PORT: 3001
+      JWT_SECRET: supersecret
+    ports:
+      - "3001:3001"
+    depends_on:
+      - db
+
+  product:
+    build: ./services/product
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/foodfast?schema=product
+      PORT: 3002
+      IMAGES_DIR: /images
+    ports:
+      - "3002:3002"
+    depends_on:
+      - db
+    volumes:
+      - ./images:/images
+
+  order:
+    build: ./services/order
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/foodfast?schema=order
+      PORT: 3003
+      PRODUCT_URL: http://product:3002
+      PAYMENT_URL: http://payment:3004
+    ports:
+      - "3003:3003"
+    depends_on:
+      - db
+      - product
+      - payment
+
+  payment:
+    build: ./services/payment
+    environment:
+      PORT: 3004
+      VNP_TMN_CODE: "MGGSDF52"        # mã website test do VNPay cấp
+      VNP_HASH_SECRET: "AGWYEAZUADNU05SZ0UF58INWW0VENF4P"  # secret key do VNPay cấp
+      VNP_URL: "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
+      VNP_RETURN_URL: "http://10.40.112.64:3004/vnpay/return"   # hoặc domain public của bạn
+      FRONTEND_URL: "http://10.40.112.64:5173"
+      USD_TO_VND_RATE: "25000"
+    ports:
+      - "3004:3004"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: others/Dockerfile
+      args:
+        VITE_PRODUCT_BASE: http://10.40.112.64:3002
+        VITE_USER_BASE: http://10.40.112.64:3001
+        VITE_ORDER_BASE: http://10.40.112.64:3003
+        VITE_PAYMENT_BASE: http://10.40.112.64:3004
+        VITE_TRACKASIA_KEY: a8da2e51d0a720ef81a1762860280f15fa
+    ports:
+      - "5173:80"
+    environment:
+        VITE_PRODUCT_BASE: http://10.40.112.64:3002
+        VITE_USER_BASE: http://10.40.112.64:3001
+        VITE_ORDER_BASE: http://10.40.112.64:3003
+        VITE_PAYMENT_BASE: http://10.40.112.64:3004
+        VITE_TRACKASIA_KEY: a8da2e51d0a720ef81a1762860280f15fa
+    depends_on:
+      - product
+      - user
+      - order
+    volumes:
+      - ./images:/usr/share/nginx/html/images:ro
+
+volumes:
+  db-data:
