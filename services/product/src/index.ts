@@ -87,7 +87,28 @@ app.delete('/restaurants/:id', async (req: Request, res: Response) => {
     const id = req.params.id;
     // Check if restaurant has products
     const products = await prisma.product.findMany({ where: { restaurantId: id }, select: { id: true } });
+    
     if (products.length > 0) {
+        // Check if any of these products are in any order (active or history)
+        try {
+            const pIds = products.map(p => p.id);
+            const check: any = await fetch(`${ORDER_URL}/orders/check-products`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productIds: pIds })
+            }).then(r => r.json());
+            
+            if (check && check.hasPaidOrders) {
+                return res.status(400).json({ error: 'Nhà hàng có đơn hàng (đang giao hoặc lịch sử), không thể xoá' });
+            }
+        } catch (err) {
+            console.error('Failed to check orders for restaurant deletion', err);
+            // If check fails, maybe safe to fail open or closed? 
+            // Safest is to fail closed if we want to ensure integrity, but for now let's log and proceed or return error?
+            // Let's return error to be safe.
+            return res.status(500).json({ error: 'Lỗi kiểm tra ràng buộc đơn hàng' });
+        }
+
         // Unlink products from this restaurant so they don't block deletion (or get deleted if cascade was set)
         // We set restaurantId to null. The frontend will detect this as "Restaurant not found" for active orders.
         await prisma.product.updateMany({
@@ -374,7 +395,7 @@ app.delete('/products/:id', async (req: Request, res: Response) => {
         }).then(r => r.json());
         
         if (check && check.hasPaidOrders) {
-            return res.status(400).json({ error: 'Món ăn đang được giao, không thể xoá' });
+            return res.status(400).json({ error: 'Món ăn có trong đơn hàng (đang giao hoặc lịch sử), không thể xoá' });
         }
     } catch (err) {
         console.error('Failed to check orders', err);

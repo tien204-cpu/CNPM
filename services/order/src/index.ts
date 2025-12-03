@@ -445,19 +445,12 @@ app.post('/orders/check-products', async (req: any, res: any) => {
       // Check for orders that are in active delivery phase
       // Statuses: 'Bắt đầu lấy đồ ăn', 'Chuẩn bị giao hàng', 'Đang giao đồ ăn bằng drone'
       // 'Điều drone tới nhà hàng' is initial state, maybe cancellable?
-      // User requirement: "khi đã bấm drone giao hàng ... thì ... ko thể bị xoá"
-      // "Bấm drone giao hàng" triggers /drone/start which sets status 'Đang giao đồ ăn bằng drone'
-      // But /drone/arm sets 'Bắt đầu lấy đồ ăn' -> 'Chuẩn bị giao hàng'
-      // Let's protect all statuses that imply drone activity or delivery in progress
-      
-      const activeStatuses = ['Bắt đầu lấy đồ ăn', 'Chuẩn bị giao hàng', 'Đang giao đồ ăn bằng drone'];
+      // User requirement: "nếu đơn hàng có món ăn hay nhà hàng nào vẫn còn lưu trong admin thì nhà hàng và món ăn đó không thể bị xoá"
+      // This means we should check for ANY order containing these products, not just active ones.
       
       const count = await prisma.orderItem.count({
           where: {
-              productId: { in: productIds },
-              order: {
-                  status: { in: activeStatuses }
-              }
+              productId: { in: productIds }
           }
       });
       res.json({ hasPaidOrders: count > 0 });

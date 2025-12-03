@@ -1214,9 +1214,9 @@ export default function App() {
         <div className="card">
           <div id="trackmap" style={{ width:'100%', height: 360, borderRadius: 12 }} />
           
-          {order?.status === 'Đang giao đồ ăn bằng drone' && progress >= 0.5 && deliveryDist > 0 && (
+          {order?.status === 'Đang giao đồ ăn bằng drone' && progress >= 0.333 && deliveryDist > 0 && (
             <div style={{ marginTop: 12, padding: 12, background: '#eff6ff', color: '#1d4ed8', borderRadius: 8, border: '1px solid #bfdbfe' }}>
-              <strong>Thông báo:</strong> Drone đã đi được hơn một nửa quãng đường. 
+              <strong>Thông báo:</strong> Drone đã đi được hơn 1/3 quãng đường. 
               Còn khoảng {(deliveryDist * (1 - progress)).toFixed(1)} km nữa.
             </div>
           )}
