@@ -15,14 +15,14 @@ const TRACKASIA_KEY = (import.meta as any).env.VITE_TRACKASIA_KEY || 'a8da2e51d0
 
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371; // Radius of the earth in km
-  const dLat = (lat2-lat1) * (Math.PI/180);
-  const dLon = (lon2-lon1) * (Math.PI/180); 
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * (Math.PI/180)) * Math.cos(lat2 * (Math.PI/180)) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2)
-    ; 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    ;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const d = R * c; // Distance in km
   return d;
 }
@@ -30,7 +30,7 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
 type Product = { id: string; name: string; price: number; stock?: number; imageUrl?: string; description?: string }
 
 function ImageWithPlaceholder({ src, srcList = [], alt, className, style }: { src?: string; srcList?: string[]; alt?: string; className?: string; style?: any }) {
-  const name = String(alt || '').slice(0,40)
+  const name = String(alt || '').slice(0, 40)
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop stop-color='#a78bfa' offset='0'/><stop stop-color='#60a5fa' offset='1'/></linearGradient></defs><rect width='100%' height='100%' fill='url(#g)'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='Poppins,Arial' font-size='28' fill='white' opacity='0.9'>${name || 'Food'}</text></svg>`
   const instant = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
   const chain = [src, ...srcList, instant].filter(Boolean) as string[]
@@ -130,7 +130,7 @@ export default function App() {
 
   // Note: giá min/max chỉ áp dụng khi bấm nút "Áp dụng" để tránh mất focus trên Edge
 
-  
+
 
   useEffect(() => {
     if (route === '/register') setAuthMode('register')
@@ -167,7 +167,7 @@ export default function App() {
         const u = JSON.parse(raw)
         if (u && u.email) setUser(u)
       }
-    } catch {}
+    } catch { }
   }, [])
 
   useEffect(() => {
@@ -301,7 +301,7 @@ export default function App() {
     if (ascii && ascii !== base && ascii !== norm) variants.push(ascii)
     // Reordered variant to help Nominatim parse better
     const parts = base.split(',').map(s => s.trim()).filter(Boolean)
-    if (parts.length >= 3) variants.push(parts.slice(0,2).join(' ') + ', ' + parts.slice(2).join(', '))
+    if (parts.length >= 3) variants.push(parts.slice(0, 2).join(' ') + ', ' + parts.slice(2).join(', '))
     // Strip leading housenumber token (e.g., "F1/12M,") to allow street-level match as fallback
     if (parts.length >= 2) {
       const first = parts[0]
@@ -335,8 +335,8 @@ export default function App() {
       }
       return sc
     }
-    function sortByScore(list: Array<{ lat:number; lon:number; display_name?: string }>) {
-      return list.slice().sort((a,b) => scoreDisplay(b.display_name) - scoreDisplay(a.display_name))
+    function sortByScore(list: Array<{ lat: number; lon: number; display_name?: string }>) {
+      return list.slice().sort((a, b) => scoreDisplay(b.display_name) - scoreDisplay(a.display_name))
     }
     let street = undefined as string | undefined
     let house = undefined as string | undefined
@@ -351,12 +351,12 @@ export default function App() {
           const r = await fetch(url, { method: 'GET' })
           const data: any = await r.json()
           const results = Array.isArray(data?.results) ? data.results : []
-          let list: Array<{ lat:number; lon:number; display_name?: string }> = results.map((it: any) => ({ lat: Number(it?.geometry?.location?.lat), lon: Number(it?.geometry?.location?.lng), display_name: it?.formatted_address || it?.name }))
-            .filter((p: { lat:number; lon:number }) => Number.isFinite(p.lat) && Number.isFinite(p.lon))
+          let list: Array<{ lat: number; lon: number; display_name?: string }> = results.map((it: any) => ({ lat: Number(it?.geometry?.location?.lat), lon: Number(it?.geometry?.location?.lng), display_name: it?.formatted_address || it?.name }))
+            .filter((p: { lat: number; lon: number }) => Number.isFinite(p.lat) && Number.isFinite(p.lon))
           list = sortByScore(list)
           if (list.length > 0) return list
         }
-      } catch {}
+      } catch { }
     }
 
     for (const q of variants) {
@@ -364,10 +364,10 @@ export default function App() {
         const url = `https://nominatim.openstreetmap.org/search?format=json&limit=7&addressdetails=1&accept-language=vi,en&countrycodes=vn&q=${encodeURIComponent(q)}`
         const r = await fetch(url, { method: 'GET' })
         const arr: any[] = await r.json()
-        let list: Array<{ lat:number; lon:number; display_name?: string }> = (Array.isArray(arr) ? arr : []).filter((it: any) => it && it.lat && it.lon).map((it: any) => ({ lat: parseFloat(it.lat), lon: parseFloat(it.lon), display_name: it.display_name }))
+        let list: Array<{ lat: number; lon: number; display_name?: string }> = (Array.isArray(arr) ? arr : []).filter((it: any) => it && it.lat && it.lon).map((it: any) => ({ lat: parseFloat(it.lat), lon: parseFloat(it.lon), display_name: it.display_name }))
         list = sortByScore(list)
         if (list.length > 0) return list
-      } catch {}
+      } catch { }
     }
     // Try structured queries (currently empty; reserved for future structured calls)
     for (const qs of structuredQueries) {
@@ -377,9 +377,29 @@ export default function App() {
         const arr: any[] = await r.json()
         const list = sortByScore((Array.isArray(arr) ? arr : []).filter((it: any) => it && it.lat && it.lon).map((it: any) => ({ lat: parseFloat(it.lat), lon: parseFloat(it.lon), display_name: it.display_name })))
         if (list.length > 0) return list
-      } catch {}
+      } catch { }
     }
     return []
+  }
+
+  // TrackAsia Autocomplete v2 API for real-time address suggestions
+  async function autocompleteAddress(input: string): Promise<Array<{ description: string; place_id?: string; lat?: number; lng?: number; structured_formatting?: { main_text: string; secondary_text: string } }>> {
+    if (!input || input.trim().length < 2) return []
+    try {
+      const url = `https://maps.track-asia.com/api/v2/place/autocomplete/json?input=${encodeURIComponent(input)}&key=${encodeURIComponent(TRACKASIA_KEY)}&size=7&new_admin=true&include_old_admin=true`
+      const r = await fetch(url, { method: 'GET' })
+      const data: any = await r.json()
+      const predictions = Array.isArray(data?.predictions) ? data.predictions : []
+      return predictions.map((p: any) => ({
+        description: p?.description || '',
+        place_id: p?.place_id,
+        lat: p?.geometry?.location?.lat,
+        lng: p?.geometry?.location?.lng,
+        structured_formatting: p?.structured_formatting
+      })).filter((p: any) => p.description)
+    } catch {
+      return []
+    }
   }
 
   function pickRecommended(list: Product[], count = 9) {
@@ -396,7 +416,7 @@ export default function App() {
       }
       return h
     }
-    return list.slice().sort((a,b) => score(a.id) - score(b.id)).slice(0, count)
+    return list.slice().sort((a, b) => score(a.id) - score(b.id)).slice(0, count)
   }
 
   function go(path: string) { window.location.hash = path }
@@ -429,7 +449,7 @@ export default function App() {
       const address = addressRef.current?.value || authAddress
       if (authMode === 'register') {
         if (!email || !pass) { setAuthError('Vui lòng nhập email và mật khẩu'); return }
-        
+
         // Validation
         let hasError = false
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -449,7 +469,7 @@ export default function App() {
       try {
         const meResp = await axios.get(`${USER_BASE.replace(/\/$/, '')}/me`, { headers: { Authorization: `Bearer ${token}` } })
         me = meResp.data
-      } catch (e) {}
+      } catch (e) { }
       const u = { id: me?.id || '', email, token, role: me?.role || 'user' }
       setUser(u)
       localStorage.setItem('ff_user', JSON.stringify(u))
@@ -507,7 +527,7 @@ export default function App() {
     setUser(null)
     setCart([])
     setLastOrder(null)
-    try { localStorage.removeItem('ff_user') } catch (e) {}
+    try { localStorage.removeItem('ff_user') } catch (e) { }
     go('/')
   }
 
@@ -524,7 +544,7 @@ export default function App() {
       let lngPayload = shipLng
       if (!(typeof latPayload === 'number' && typeof lngPayload === 'number')) {
         const cands = await geocodeAddress(sAddress)
-        if (cands[0]) { latPayload = cands[0].lat; lngPayload = cands[0].lon; try { setShipLat(latPayload); setShipLng(lngPayload) } catch {} }
+        if (cands[0]) { latPayload = cands[0].lat; lngPayload = cands[0].lon; try { setShipLat(latPayload); setShipLng(lngPayload) } catch { } }
       }
       if (!(typeof latPayload === 'number' && typeof lngPayload === 'number')) {
         alert('Không xác định được vị trí giao hàng từ địa chỉ. Vui lòng bấm "Định vị" hoặc chọn điểm trên bản đồ (click hoặc kéo marker), rồi thử lại.')
@@ -577,7 +597,7 @@ export default function App() {
     if (route === '/' && noUserFilters && !showAll) {
       list = pickRecommended(products, 9)
     } else {
-      list = filtered.slice().sort((a,b) => (a.name||'').localeCompare(b.name||''))
+      list = filtered.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''))
     }
     return (
       <div>
@@ -604,7 +624,7 @@ export default function App() {
                 {!showAll ? (
                   <>
                     <span className="loading" style={{ padding: 0 }}>Đang hiển thị gợi ý hôm nay</span>
-                    <button className="btn ghost" onClick={() => { const ns = (recoSeed + 1) % 100000; setRecoSeed(ns); try { localStorage.setItem('ff_reco_seed', String(ns)) } catch {} }}>Gợi ý khác</button>
+                    <button className="btn ghost" onClick={() => { const ns = (recoSeed + 1) % 100000; setRecoSeed(ns); try { localStorage.setItem('ff_reco_seed', String(ns)) } catch { } }}>Gợi ý khác</button>
                     <button className="btn ghost" onClick={() => setShowAll(true)}>Xem tất cả</button>
                   </>
                 ) : (
@@ -691,7 +711,7 @@ export default function App() {
             </div>
           )}
           {authMode === 'login' && forgotMode && forgotStep === 'email' && (
-            <div style={{ display:'flex', gap:8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn primary" onClick={verifyEmail}>Tiếp tục</button>
               <button className="btn ghost" onClick={() => { setForgotMode(false); setForgotStep('email'); }}>Huỷ</button>
             </div>
@@ -706,7 +726,7 @@ export default function App() {
                 <label>Nhập lại mật khẩu mới</label>
                 <input className="input" type="password" ref={confirmPassRef} placeholder="nhập lại mật khẩu mới" />
               </div>
-              <div style={{ display:'flex', gap:8 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn primary" onClick={resetPassword}>Đặt lại mật khẩu</button>
                 <button className="btn ghost" onClick={() => { setForgotMode(false); setForgotStep('email'); }}>Huỷ</button>
               </div>
@@ -714,7 +734,7 @@ export default function App() {
           )}
           {authMode === 'register' && (
             <div className="form-row">
-              <label style={{ display:'flex', alignItems:'center', gap:8, justifyContent:'flex-start' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start' }}>
                 <input id="agree-terms" type="checkbox" checked={agreeTerms} onChange={e => setAgreeTerms(e.target.checked)} />
                 <span>Tôi đồng ý với các điều khoản</span>
               </label>
@@ -737,62 +757,62 @@ export default function App() {
 
     useEffect(() => {
       if (!order && id) {
-        axios.get(`${ORDER_BASE.replace(/\/$/, '')}/orders/${id}`).then(r => setOrder(r.data)).catch(() => {})
+        axios.get(`${ORDER_BASE.replace(/\/$/, '')}/orders/${id}`).then(r => setOrder(r.data)).catch(() => { })
       }
     }, [id])
 
     // Check for entity existence periodically
     useEffect(() => {
-        if (!order) return;
-        const checkEntities = async () => {
+      if (!order) return;
+      const checkEntities = async () => {
+        try {
+          // Check Drone
+          if (order.droneId) {
             try {
-                // Check Drone
-                if (order.droneId) {
-                    try {
-                        await axios.get(`${ORDER_BASE.replace(/\/$/, '')}/drones/${order.droneId}`);
-                    } catch (e: any) {
-                        if (e.response && e.response.status === 404) {
-                             setCancelledReason("Giao dịch bị huỷ do drone không tồn tại");
-                             return;
-                        }
-                    }
-                }
-
-                // Check Items (Products) & Restaurants
-                if (order.items && order.items.length > 0) {
-                    for (const item of order.items) {
-                        try {
-                            await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${item.productId}`);
-                        } catch (e: any) {
-                            if (e.response && e.response.status === 404) {
-                                setCancelledReason("Giao dịch bị huỷ do món ăn không tồn tại");
-                                return;
-                            }
-                        }
-                        
-                        try {
-                             const p = await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${item.productId}`);
-                             if (p.data && p.data.restaurantId) {
-                                 try {
-                                     await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${p.data.restaurantId}`);
-                                 } catch (e: any) {
-                                     if (e.response && e.response.status === 404) {
-                                         setCancelledReason("Giao dịch bị huỷ do nhà hàng không tồn tại");
-                                         return;
-                                     }
-                                 }
-                             }
-                        } catch {}
-                    }
-                }
-            } catch (err) {
-                console.error("Entity check failed", err);
+              await axios.get(`${ORDER_BASE.replace(/\/$/, '')}/drones/${order.droneId}`);
+            } catch (e: any) {
+              if (e.response && e.response.status === 404) {
+                setCancelledReason("Giao dịch bị huỷ do drone không tồn tại");
+                return;
+              }
             }
-        };
-        
-        const interval = setInterval(checkEntities, 3000); // Check every 3 seconds
-        checkEntities();
-        return () => clearInterval(interval);
+          }
+
+          // Check Items (Products) & Restaurants
+          if (order.items && order.items.length > 0) {
+            for (const item of order.items) {
+              try {
+                await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${item.productId}`);
+              } catch (e: any) {
+                if (e.response && e.response.status === 404) {
+                  setCancelledReason("Giao dịch bị huỷ do món ăn không tồn tại");
+                  return;
+                }
+              }
+
+              try {
+                const p = await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${item.productId}`);
+                if (p.data && p.data.restaurantId) {
+                  try {
+                    await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${p.data.restaurantId}`);
+                  } catch (e: any) {
+                    if (e.response && e.response.status === 404) {
+                      setCancelledReason("Giao dịch bị huỷ do nhà hàng không tồn tại");
+                      return;
+                    }
+                  }
+                }
+              } catch { }
+            }
+          }
+        } catch (err) {
+          console.error("Entity check failed", err);
+        }
+      };
+
+      const interval = setInterval(checkEntities, 3000); // Check every 3 seconds
+      checkEntities();
+      return () => clearInterval(interval);
     }, [order]);
 
     useEffect(() => {
@@ -804,10 +824,10 @@ export default function App() {
           try {
             const data = JSON.parse(ev.data || '{}')
             setOrder((o: any) => ({ ...(o || {}), status: data.status }))
-          } catch {}
+          } catch { }
         })
-      } catch {}
-      return () => { try { es && es.close() } catch {} }
+      } catch { }
+      return () => { try { es && es.close() } catch { } }
     }, [id])
     if (!order) return <div className="page"><div className="card"><div className="loading">Đang tải đơn hàng...</div></div></div>
     const items: Array<{ productId: string; qty: number }> = order.items || []
@@ -817,68 +837,68 @@ export default function App() {
     return (
       <div className="page" style={cancelledReason ? { position: 'relative', overflow: 'hidden' } : {}}>
         {cancelledReason && (
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(255,255,255,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <div className="card" style={{ padding: 30, textAlign: 'center', border: '1px solid red' }}>
-                    <h3>{cancelledReason}</h3>
-                    <button className="btn primary" onClick={() => window.location.hash = '/'}>Quay về trang chủ</button>
-                </div>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(255,255,255,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="card" style={{ padding: 30, textAlign: 'center', border: '1px solid red' }}>
+              <h3>{cancelledReason}</h3>
+              <button className="btn primary" onClick={() => window.location.hash = '/'}>Quay về trang chủ</button>
             </div>
+          </div>
         )}
         <div style={cancelledReason ? { filter: 'blur(4px)', pointerEvents: 'none' } : {}}>
-        <h2>Hóa đơn</h2>
-        <div className="card">
-          {vnpCode && (
-            <div style={{ marginBottom: 12, padding: 12, borderRadius: 8, border: '1px solid var(--border)', background: isVnpSuccess ? '#ecfdf3' : '#fef2f2', color: isVnpSuccess ? '#166534' : '#b91c1c' }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                {isVnpSuccess ? 'Thanh toán VNPay thành công' : 'Thanh toán VNPay không thành công hoặc đã bị huỷ'}
+          <h2>Hóa đơn</h2>
+          <div className="card">
+            {vnpCode && (
+              <div style={{ marginBottom: 12, padding: 12, borderRadius: 8, border: '1px solid var(--border)', background: isVnpSuccess ? '#ecfdf3' : '#fef2f2', color: isVnpSuccess ? '#166534' : '#b91c1c' }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                  {isVnpSuccess ? 'Thanh toán VNPay thành công' : 'Thanh toán VNPay không thành công hoặc đã bị huỷ'}
+                </div>
+                <div style={{ fontSize: 13, marginBottom: isVnpSuccess ? 8 : 0 }}>
+                  {isVnpSuccess ? 'Đơn hàng của bạn đã được thanh toán. Bạn có thể tiếp tục để theo dõi trạng thái giao hàng.' : 'Bạn có thể chọn lại phương thức thanh toán khác hoặc thử thanh toán lại.'}
+                </div>
+                {isVnpSuccess && (
+                  <button
+                    className="btn primary"
+                    onClick={() => { go(`/track/${id}`) }}
+                  >
+                    Tiếp tục
+                  </button>
+                )}
               </div>
-              <div style={{ fontSize: 13, marginBottom: isVnpSuccess ? 8 : 0 }}>
-                {isVnpSuccess ? 'Đơn hàng của bạn đã được thanh toán. Bạn có thể tiếp tục để theo dõi trạng thái giao hàng.' : 'Bạn có thể chọn lại phương thức thanh toán khác hoặc thử thanh toán lại.'}
-              </div>
-              {isVnpSuccess && (
-                <button
-                  className="btn primary"
-                  onClick={() => { go(`/track/${id}`) }}
-                >
-                  Tiếp tục
-                </button>
-              )}
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div><b>Mã đơn:</b> {order.id}</div>
+              {order.createdAt && <div><b>Thời gian:</b> {new Date(order.createdAt).toLocaleString()}</div>}
+              {order.status && <div><b>Trạng thái:</b> {order.status}</div>}
+              <div><b>Người nhận:</b> {order.shippingName || order?.shipping?.name || shipName}</div>
+              <div><b>Điện thoại:</b> {order.shippingPhone || order?.shipping?.phone || shipPhone}</div>
+              <div><b>Địa chỉ:</b> {order.shippingAddress || order?.shipping?.address || shipAddress}</div>
+              <div><b>Thanh toán:</b> {(order.paymentMethod || order?.payment?.method || paymentMethod) === 'COD' ? 'COD (Thanh toán khi nhận hàng)' : 'VNPay'}</div>
             </div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div><b>Mã đơn:</b> {order.id}</div>
-            {order.createdAt && <div><b>Thời gian:</b> {new Date(order.createdAt).toLocaleString()}</div>}
-            {order.status && <div><b>Trạng thái:</b> {order.status}</div>}
-            <div><b>Người nhận:</b> {order.shippingName || order?.shipping?.name || shipName}</div>
-            <div><b>Điện thoại:</b> {order.shippingPhone || order?.shipping?.phone || shipPhone}</div>
-            <div><b>Địa chỉ:</b> {order.shippingAddress || order?.shipping?.address || shipAddress}</div>
-            <div><b>Thanh toán:</b> {(order.paymentMethod || order?.payment?.method || paymentMethod) === 'COD' ? 'COD (Thanh toán khi nhận hàng)' : 'VNPay'}</div>
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>Sản phẩm</div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {items.map((it, idx) => {
+                  const p = products.find(px => px.id === it.productId)
+                  return (
+                    <li key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                      <img src={imageFor(p, it.productId)} style={{ width: 70, height: 48, objectFit: 'cover', borderRadius: 8 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600 }}>{p?.name || it.productId}</div>
+                        <div style={{ color: 'var(--muted)' }}>SL: {it.qty}</div>
+                      </div>
+                      <div style={{ fontWeight: 600 }}>{p ? `$${(p.price * it.qty).toFixed(2)}` : ''}</div>
+                    </li>
+                  )
+                })}
+              </ul>
+              <div style={{ marginTop: 8, fontWeight: 700 }}>Tổng cộng: ${Number(total).toFixed(2)}</div>
+            </div>
+            <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+              <a className="btn ghost" href="#/">Về trang chủ</a>
+              <a className="btn primary" href={`#/track/${id}`}>Theo dõi đơn hàng</a>
+              <a className="btn ghost" href="#/history">Lịch sử</a>
+            </div>
           </div>
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Sản phẩm</div>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {items.map((it, idx) => {
-                const p = products.find(px => px.id === it.productId)
-                return (
-                  <li key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                    <img src={imageFor(p, it.productId)} style={{ width: 70, height: 48, objectFit: 'cover', borderRadius: 8 }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600 }}>{p?.name || it.productId}</div>
-                      <div style={{ color: 'var(--muted)' }}>SL: {it.qty}</div>
-                    </div>
-                    <div style={{ fontWeight: 600 }}>{p ? `$${(p.price * it.qty).toFixed(2)}` : ''}</div>
-                  </li>
-                )
-              })}
-            </ul>
-            <div style={{ marginTop: 8, fontWeight: 700 }}>Tổng cộng: ${Number(total).toFixed(2)}</div>
-          </div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-            <a className="btn ghost" href="#/">Về trang chủ</a>
-            <a className="btn primary" href={`#/track/${id}`}>Theo dõi đơn hàng</a>
-            <a className="btn ghost" href="#/history">Lịch sử</a>
-          </div>
-        </div>
         </div>
       </div>
     )
@@ -902,7 +922,7 @@ export default function App() {
       const activeIds = new Set(orders.map(o => o.id))
       // close removed
       for (const id of Object.keys(current)) {
-        if (!activeIds.has(id)) { try { current[id].close() } catch {}; delete current[id] }
+        if (!activeIds.has(id)) { try { current[id].close() } catch { }; delete current[id] }
       }
       // open new
       for (const o of orders) {
@@ -913,15 +933,15 @@ export default function App() {
               try {
                 const data = JSON.parse(ev.data || '{}')
                 setOrders(prev => prev.map(px => px.id === o.id ? { ...px, status: data.status } : px))
-              } catch {}
+              } catch { }
             })
             current[o.id] = es
-          } catch {}
+          } catch { }
         }
       }
       esRef.current = current
       return () => {
-        for (const id of Object.keys(current)) { try { current[id].close() } catch {} }
+        for (const id of Object.keys(current)) { try { current[id].close() } catch { } }
       }
     }, [orders])
     return (
@@ -933,13 +953,13 @@ export default function App() {
           ) : (
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               {orders.map((o: any) => (
-                <li key={o.id} style={{ padding: 8, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, justifyContent:'space-between' }}>
+                <li key={o.id} style={{ padding: 8, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600 }}>Đơn #{o.id.slice(0,6)} • ${Number(o.total).toFixed(2)}</div>
+                    <div style={{ fontWeight: 600 }}>Đơn #{o.id.slice(0, 6)} • ${Number(o.total).toFixed(2)}</div>
                     <div style={{ color: 'var(--muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleString() : ''} • {o.paymentMethod || 'COD'}</div>
                     <div style={{ color: 'var(--muted)' }}>Địa chỉ: {o.shippingAddress || ''}</div>
                   </div>
-                  <div style={{ display:'flex', gap:6 }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
                     <a className="btn small ghost" href={`#/bill/${o.id}`}>Hóa đơn</a>
                     <a className="btn small primary" href={`#/track/${o.id}`}>Theo dõi</a>
                   </div>
@@ -974,7 +994,7 @@ export default function App() {
       <div className="steps">
         <div className="rail"><div className="fill" style={{ width: `${progressPct}%` }} /></div>
         {steps.map((s, i) => (
-          <div key={s.key} className={`step${i < idx ? ' completed' : (i===idx ? ' active' : '')}`}>
+          <div key={s.key} className={`step${i < idx ? ' completed' : (i === idx ? ' active' : '')}`}>
             <div className="circle" aria-hidden>{s.icon}</div>
             <div className="label">{s.label}</div>
           </div>
@@ -993,75 +1013,75 @@ export default function App() {
     const markerRef = useRef<any>(null)
     const routeRef = useRef<any>(null)
     const stopMarkersRef = useRef<any[]>([])
-    const stopsDataRef = useRef<Array<{ lat:number; lng:number; name?: string; address?: string }>>([])
+    const stopsDataRef = useRef<Array<{ lat: number; lng: number; name?: string; address?: string }>>([])
     const shownStopsRef = useRef<Set<number>>(new Set())
-    
+
     // Check for entity existence periodically
     useEffect(() => {
-        if (!order) return;
-        const checkEntities = async () => {
-            // Nếu đã thanh toán (VNPay và không phải pending/cancelled), bỏ qua kiểm tra huỷ
-            const isPaid = order.paymentMethod === 'VNPay' && order.status !== 'pending_payment' && order.status !== 'cancelled' && order.status !== 'huỷ' && order.status !== 'huy';
-            if (isPaid) return;
+      if (!order) return;
+      const checkEntities = async () => {
+        // Nếu đã thanh toán (VNPay và không phải pending/cancelled), bỏ qua kiểm tra huỷ
+        const isPaid = order.paymentMethod === 'VNPay' && order.status !== 'pending_payment' && order.status !== 'cancelled' && order.status !== 'huỷ' && order.status !== 'huy';
+        if (isPaid) return;
 
+        try {
+          // Check Drone
+          if (order.droneId) {
             try {
-                // Check Drone
-                if (order.droneId) {
-                    try {
-                        await axios.get(`${ORDER_BASE.replace(/\/$/, '')}/drones/${order.droneId}`);
-                    } catch (e: any) {
-                        if (e.response && e.response.status === 404) {
-                             setCancelledReason("Giao dịch bị huỷ do drone không tồn tại");
-                             return;
-                        }
-                    }
-                }
-
-                // Check Items (Products) & Restaurants
-                if (order.items && order.items.length > 0) {
-                    const isVNPay = order.paymentMethod === 'VNPay';
-                    const refundMsg = isVNPay ? '.Hệ thống sẽ tự động hoàn tiền' : '';
-
-                    for (const item of order.items) {
-                        try {
-                            await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${item.productId}`);
-                        } catch (e: any) {
-                            if (e.response && e.response.status === 404) {
-                                setCancelledReason(`Giao dịch bị huỷ do món ăn không tồn tại${refundMsg}`);
-                                return;
-                            }
-                        }
-                        
-                        // Check Restaurant of the product
-                        // We need to know the restaurant ID. We can get it from product details.
-                        try {
-                             const p = await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${item.productId}`);
-                             // If product exists but has no restaurantId, it means restaurant was deleted (orphaned product)
-                             if (p.data && !p.data.restaurantId) {
-                                 setCancelledReason(`Giao dịch bị huỷ do nhà hàng không tồn tại${refundMsg}`);
-                                 return;
-                             }
-                             if (p.data && p.data.restaurantId) {
-                                 try {
-                                     await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${p.data.restaurantId}`);
-                                 } catch (e: any) {
-                                     if (e.response && e.response.status === 404) {
-                                         setCancelledReason(`Giao dịch bị huỷ do nhà hàng không tồn tại${refundMsg}`);
-                                         return;
-                                     }
-                                 }
-                             }
-                        } catch {}
-                    }
-                }
-            } catch (err) {
-                console.error("Entity check failed", err);
+              await axios.get(`${ORDER_BASE.replace(/\/$/, '')}/drones/${order.droneId}`);
+            } catch (e: any) {
+              if (e.response && e.response.status === 404) {
+                setCancelledReason("Giao dịch bị huỷ do drone không tồn tại");
+                return;
+              }
             }
-        };
-        
-        const interval = setInterval(checkEntities, 3000); // Check every 3 seconds
-        checkEntities();
-        return () => clearInterval(interval);
+          }
+
+          // Check Items (Products) & Restaurants
+          if (order.items && order.items.length > 0) {
+            const isVNPay = order.paymentMethod === 'VNPay';
+            const refundMsg = isVNPay ? '.Hệ thống sẽ tự động hoàn tiền' : '';
+
+            for (const item of order.items) {
+              try {
+                await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${item.productId}`);
+              } catch (e: any) {
+                if (e.response && e.response.status === 404) {
+                  setCancelledReason(`Giao dịch bị huỷ do món ăn không tồn tại${refundMsg}`);
+                  return;
+                }
+              }
+
+              // Check Restaurant of the product
+              // We need to know the restaurant ID. We can get it from product details.
+              try {
+                const p = await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products/${item.productId}`);
+                // If product exists but has no restaurantId, it means restaurant was deleted (orphaned product)
+                if (p.data && !p.data.restaurantId) {
+                  setCancelledReason(`Giao dịch bị huỷ do nhà hàng không tồn tại${refundMsg}`);
+                  return;
+                }
+                if (p.data && p.data.restaurantId) {
+                  try {
+                    await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${p.data.restaurantId}`);
+                  } catch (e: any) {
+                    if (e.response && e.response.status === 404) {
+                      setCancelledReason(`Giao dịch bị huỷ do nhà hàng không tồn tại${refundMsg}`);
+                      return;
+                    }
+                  }
+                }
+              } catch { }
+            }
+          }
+        } catch (err) {
+          console.error("Entity check failed", err);
+        }
+      };
+
+      const interval = setInterval(checkEntities, 3000); // Check every 3 seconds
+      checkEntities();
+      return () => clearInterval(interval);
     }, [order]);
 
     useEffect(() => {
@@ -1073,8 +1093,8 @@ export default function App() {
           mapRef.current = L.map('trackmap').setView(center, 13)
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapRef.current)
         }
-      } catch {}
-      axios.get(`${ORDER_BASE.replace(/\/$/, '')}/orders/${id}`).then(r => setOrder(r.data)).catch(() => {})
+      } catch { }
+      axios.get(`${ORDER_BASE.replace(/\/$/, '')}/orders/${id}`).then(r => setOrder(r.data)).catch(() => { })
       let es: EventSource | null = null
       try {
         es = new EventSource(`${ORDER_BASE.replace(/\/$/, '')}/orders/${id}/events`)
@@ -1088,7 +1108,7 @@ export default function App() {
               droneSpeed: (data as any).droneSpeed ?? (o && o.droneSpeed),
               deliveryTimeSeconds: (data as any).deliveryTimeSeconds ?? (o && o.deliveryTimeSeconds),
             }))
-          } catch {}
+          } catch { }
         })
         es.addEventListener('drone', (ev: any) => {
           try {
@@ -1102,8 +1122,8 @@ export default function App() {
             }
             if (data.type === 'route' && Array.isArray(data.path)) {
               let d = 0
-              for(let i=1; i<data.path.length; i++) {
-                  d += getDistanceFromLatLonInKm(data.path[i-1].lat, data.path[i-1].lng, data.path[i].lat, data.path[i].lng)
+              for (let i = 1; i < data.path.length; i++) {
+                d += getDistanceFromLatLonInKm(data.path[i - 1].lat, data.path[i - 1].lng, data.path[i].lat, data.path[i].lng)
               }
               setDeliveryDist(d)
 
@@ -1114,10 +1134,10 @@ export default function App() {
                   const merged = existing.concat(latlngs.map((ll: any) => L.latLng(ll[0], ll[1])))
                   routeRef.current.setLatLngs(merged)
                 } catch {
-                  try { routeRef.current = L.polyline(latlngs, { color: '#7c3aed' }).addTo(mapRef.current) } catch {}
+                  try { routeRef.current = L.polyline(latlngs, { color: '#7c3aed' }).addTo(mapRef.current) } catch { }
                 }
               } else {
-                if (routeRef.current) { try { mapRef.current.removeLayer(routeRef.current) } catch {} }
+                if (routeRef.current) { try { mapRef.current.removeLayer(routeRef.current) } catch { } }
                 // Vẽ đường từ vị trí drone ban đầu đến nhà hàng (màu khác để phân biệt)
                 if (data.initialDronePos && data.path.length > 0) {
                   const droneStart = [data.initialDronePos.lat, data.initialDronePos.lng]
@@ -1129,23 +1149,23 @@ export default function App() {
                 // reset shown stops when drawing a new route (pickup phase)
                 shownStopsRef.current = new Set()
                 // clear old stop markers
-                for (const m of stopMarkersRef.current) { try { mapRef.current.removeLayer(m) } catch {} }
+                for (const m of stopMarkersRef.current) { try { mapRef.current.removeLayer(m) } catch { } }
                 stopMarkersRef.current = []
               }
               // fit bounds to new/updated route
-              try { mapRef.current.fitBounds(routeRef.current.getBounds(), { padding: [20, 20] }) } catch {}
+              try { mapRef.current.fitBounds(routeRef.current.getBounds(), { padding: [20, 20] }) } catch { }
               // place or update stops markers if provided
               if (Array.isArray(data.stops)) {
                 stopsDataRef.current = data.stops
-                for (const m of stopMarkersRef.current) { try { mapRef.current.removeLayer(m) } catch {} }
+                for (const m of stopMarkersRef.current) { try { mapRef.current.removeLayer(m) } catch { } }
                 stopMarkersRef.current = []
                 data.stops.forEach((s: any) => {
                   try {
                     const mk = L.marker([s.lat, s.lng]).addTo(mapRef.current)
-                    const html = `<div><strong>${(s.name||'Nhà hàng')}</strong><div>${(s.address||'')}</div></div>`
+                    const html = `<div><strong>${(s.name || 'Nhà hàng')}</strong><div>${(s.address || '')}</div></div>`
                     mk.bindPopup(html)
                     stopMarkersRef.current.push(mk)
-                  } catch {}
+                  } catch { }
                 })
               }
               // ensure drone marker at start of the new segment
@@ -1170,75 +1190,75 @@ export default function App() {
                   if (d < 200) { // within 200m
                     shownStopsRef.current.add(i)
                     const mk = stopMarkersRef.current[i]
-                    try { mk && mk.openPopup() } catch {}
+                    try { mk && mk.openPopup() } catch { }
                     break
                   }
                 }
-              } catch {}
+              } catch { }
             } else if (data.type === 'arrived') {
               // nothing, user waits for admin to confirm delivered
             }
-          } catch {}
+          } catch { }
         })
-      } catch {}
-      return () => { try { es && es.close() } catch {} }
+      } catch { }
+      return () => { try { es && es.close() } catch { } }
     }, [id])
 
     useEffect(() => {
       try {
         if (markerRef.current && order?.droneName) {
-           const L = (window as any).L
-           if (L) {
-             if (!markerRef.current.getTooltip()) {
-                markerRef.current.bindTooltip(order.droneName, { permanent: true, direction: 'top', className: 'drone-label' }).openTooltip()
-             } else {
-                markerRef.current.setTooltipContent(order.droneName)
-             }
-           }
+          const L = (window as any).L
+          if (L) {
+            if (!markerRef.current.getTooltip()) {
+              markerRef.current.bindTooltip(order.droneName, { permanent: true, direction: 'top', className: 'drone-label' }).openTooltip()
+            } else {
+              markerRef.current.setTooltipContent(order.droneName)
+            }
+          }
         }
-      } catch {}
+      } catch { }
     }, [order?.droneName, markerRef.current])
 
     return (
       <div className="page" style={cancelledReason ? { position: 'relative', overflow: 'hidden' } : {}}>
         {cancelledReason && (
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(255,255,255,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <div className="card" style={{ padding: 30, textAlign: 'center', border: '1px solid red' }}>
-                    <h3>{cancelledReason}</h3>
-                    <button className="btn primary" onClick={() => window.location.hash = '/'}>Quay về trang chủ</button>
-                </div>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(255,255,255,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="card" style={{ padding: 30, textAlign: 'center', border: '1px solid red' }}>
+              <h3>{cancelledReason}</h3>
+              <button className="btn primary" onClick={() => window.location.hash = '/'}>Quay về trang chủ</button>
             </div>
+          </div>
         )}
         <div style={cancelledReason ? { filter: 'blur(4px)', pointerEvents: 'none' } : {}}>
-        <h2>Theo dõi đơn hàng</h2>
-        <div className="card">
-          <div id="trackmap" style={{ width:'100%', height: 360, borderRadius: 12 }} />
-          
-          {order?.status === 'Đang giao đồ ăn bằng drone' && progress >= 0.333 && deliveryDist > 0 && (
-            <div style={{ marginTop: 12, padding: 12, background: '#eff6ff', color: '#1d4ed8', borderRadius: 8, border: '1px solid #bfdbfe' }}>
-              <strong>Thông báo:</strong> Drone đã đi được hơn 1/3 quãng đường. 
-              Còn khoảng {(deliveryDist * (1 - progress)).toFixed(1)} km nữa.
-            </div>
-          )}
+          <h2>Theo dõi đơn hàng</h2>
+          <div className="card">
+            <div id="trackmap" style={{ width: '100%', height: 360, borderRadius: 12 }} />
 
-          <div style={{ marginTop: 12 }}>
-            <StepBar status={order?.status} />
-          </div>
-          {order && (order as any).droneName && (
-            <div style={{ marginTop: 8, fontSize: 14, color: 'var(--muted)', display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <div>Tên drone: {(order as any).droneName}</div>
-              {typeof (order as any).droneSpeed === 'number' && (
-                <div>Vận tốc ước tính: {(order as any).droneSpeed.toFixed(1)} km/h</div>
-              )}
-              {typeof (order as any).deliveryTimeSeconds === 'number' && (
-                <div>Thời gian giao ước tính: ~{Math.round((order as any).deliveryTimeSeconds / 60)} phút</div>
-              )}
+            {order?.status === 'Đang giao đồ ăn bằng drone' && progress >= 0.333 && deliveryDist > 0 && (
+              <div style={{ marginTop: 12, padding: 12, background: '#eff6ff', color: '#1d4ed8', borderRadius: 8, border: '1px solid #bfdbfe' }}>
+                <strong>Thông báo:</strong> Drone đã đi được hơn 1/3 quãng đường.
+                Còn khoảng {(deliveryDist * (1 - progress)).toFixed(1)} km nữa.
+              </div>
+            )}
+
+            <div style={{ marginTop: 12 }}>
+              <StepBar status={order?.status} />
             </div>
-          )}
-          <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-            <a className="btn ghost" href={`#/bill/${id}`}>Xem hoá đơn</a>
+            {order && (order as any).droneName && (
+              <div style={{ marginTop: 8, fontSize: 14, color: 'var(--muted)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div>Tên drone: {(order as any).droneName}</div>
+                {typeof (order as any).droneSpeed === 'number' && (
+                  <div>Vận tốc ước tính: {(order as any).droneSpeed.toFixed(1)} km/h</div>
+                )}
+                {typeof (order as any).deliveryTimeSeconds === 'number' && (
+                  <div>Thời gian giao ước tính: ~{Math.round((order as any).deliveryTimeSeconds / 60)} phút</div>
+                )}
+              </div>
+            )}
+            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+              <a className="btn ghost" href={`#/bill/${id}`}>Xem hoá đơn</a>
+            </div>
           </div>
-        </div>
         </div>
       </div>
     )
@@ -1246,7 +1266,7 @@ export default function App() {
 
   function RestaurantsPage() {
     const [list, setList] = useState<any[]>([])
-    useEffect(() => { axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants`).then(r => setList(r.data||[])).catch(() => setList([])) }, [])
+    useEffect(() => { axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants`).then(r => setList(r.data || [])).catch(() => setList([])) }, [])
     return (
       <div className="page">
         <h2>Nhà hàng</h2>
@@ -1276,7 +1296,7 @@ export default function App() {
     const [list, setList] = useState<Product[]>([])
     useEffect(() => {
       axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${id}`).then(r => setRestaurant(r.data)).catch(() => setRestaurant(null))
-      axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products`).then(r => setList(r.data||[])).catch(() => setList([]))
+      axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/products`).then(r => setList(r.data || [])).catch(() => setList([]))
     }, [id])
     const items = list.filter((p: any) => (p.restaurantId || '') === id)
     return (
@@ -1360,7 +1380,7 @@ export default function App() {
               const product = pRes.data
               // If product exists but has no restaurantId, it means restaurant was deleted
               if (!product.restaurantId) throw new Error('Nhà hàng không tồn tại')
-              
+
               if (product.restaurantId) {
                 try {
                   await axios.get(`${PRODUCT_BASE.replace(/\/$/, '')}/restaurants/${product.restaurantId}`)
@@ -1387,6 +1407,60 @@ export default function App() {
     const [geoCands, setGeoCands] = useState<Array<{ lat: number; lon: number; display_name?: string }>>([])
     const [mapBoot, setMapBoot] = useState(0)
     const bootTimerRef = useRef<any>(null)
+
+    // Autocomplete state
+    const [autoSuggestions, setAutoSuggestions] = useState<Array<{ description: string; place_id?: string; lat?: number; lng?: number; structured_formatting?: { main_text: string; secondary_text: string } }>>([])
+    const [autoLoading, setAutoLoading] = useState(false)
+    const [showAutoDropdown, setShowAutoDropdown] = useState(false)
+    const autoDebounceRef = useRef<any>(null)
+
+    // Debounced autocomplete handler
+    function handleAddressInput(value: string) {
+      // Don't call setShipAddress here to avoid re-render and focus loss
+      if (autoDebounceRef.current) clearTimeout(autoDebounceRef.current)
+      if (!value || value.trim().length < 2) {
+        setAutoSuggestions([])
+        setShowAutoDropdown(false)
+        return
+      }
+      autoDebounceRef.current = setTimeout(async () => {
+        setAutoLoading(true)
+        setShowAutoDropdown(true)
+        try {
+          const results = await autocompleteAddress(value)
+          setAutoSuggestions(results)
+          if (results.length === 0) setShowAutoDropdown(false)
+        } catch {
+          setAutoSuggestions([])
+          setShowAutoDropdown(false)
+        } finally {
+          setAutoLoading(false)
+        }
+      }, 300)
+    }
+
+    // Handle suggestion selection
+    async function selectSuggestion(suggestion: { description: string; place_id?: string; lat?: number; lng?: number }) {
+      if (shipAddressRef.current) shipAddressRef.current.value = suggestion.description
+      setShipAddress(suggestion.description)
+      setShowAutoDropdown(false)
+      setAutoSuggestions([])
+
+      // If coordinates are available, use them directly
+      if (typeof suggestion.lat === 'number' && typeof suggestion.lng === 'number') {
+        setShipLat(suggestion.lat)
+        setShipLng(suggestion.lng)
+        try {
+          if (markerRef.current && mapRef.current && mapRef.current.flyTo) {
+            markerRef.current.setLngLat([suggestion.lng, suggestion.lat])
+            mapRef.current.flyTo({ center: [suggestion.lng, suggestion.lat], zoom: 16 })
+          }
+        } catch { }
+      } else {
+        // Fallback to geocoding
+        geocode(suggestion.description)
+      }
+    }
 
     async function geocode(addr?: string) {
       try {
@@ -1424,22 +1498,22 @@ export default function App() {
                 setShipLat(lat); setShipLng(lng)
                 if (markerRef.current) markerRef.current.setLngLat([lng, lat])
               }
-            } catch {}
+            } catch { }
           })
         }
         if (hasLL) {
           if (!markerRef.current) {
             markerRef.current = new TA.Marker({ draggable: true }).setLngLat([shipLng!, shipLat!]).addTo(mapRef.current)
             markerRef.current.on('dragend', () => {
-              try { const c = markerRef.current.getLngLat(); setShipLat(c.lat); setShipLng(c.lng) } catch {}
+              try { const c = markerRef.current.getLngLat(); setShipLat(c.lat); setShipLng(c.lng) } catch { }
             })
           } else { markerRef.current.setLngLat([shipLng!, shipLat!]) }
           if (mapRef.current && mapRef.current.flyTo) {
             mapRef.current.flyTo({ center: [shipLng!, shipLat!], zoom: 16 })
           }
         }
-      } catch {}
-      return () => { try { if (bootTimerRef.current) { clearTimeout(bootTimerRef.current); bootTimerRef.current = null } } catch {} }
+      } catch { }
+      return () => { try { if (bootTimerRef.current) { clearTimeout(bootTimerRef.current); bootTimerRef.current = null } } catch { } }
     }, [shipLat, shipLng, mapBoot])
 
     return (
@@ -1454,56 +1528,70 @@ export default function App() {
           </div>
         )}
         <div style={cancelledReason ? { filter: 'blur(4px)', pointerEvents: 'none' } : {}}>
-        <h2>Thanh toán</h2>
-        <div className="card">
-          <div>Tạm tính: ${subtotal.toFixed(2)}</div>
-          <div className="form-row" style={{ marginTop: 12 }}>
-            <label>Họ tên người nhận</label>
-            <input className="input" placeholder="Nguyễn Văn A" name="name" autoComplete="shipping name" defaultValue={shipName} ref={shipNameRef} onBlur={e => setShipName(e.target.value)} />
-          </div>
-          <div className="form-row">
-            <label>Số điện thoại</label>
-            <input className="input" placeholder="09xx xxx xxx" type="tel" inputMode="tel" name="tel" autoComplete="shipping tel" defaultValue={shipPhone} ref={shipPhoneRef} onBlur={e => setShipPhone(e.target.value)} />
-          </div>
-          <div className="form-row">
-            <label>Địa chỉ giao hàng</label>
-            <input className="input" placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành" name="street-address" autoComplete="shipping street-address" defaultValue={shipAddress} ref={shipAddressRef} onBlur={e => { setShipAddress(e.target.value); geocode(e.target.value) }} />
-          </div>
-          <div className="form-row" style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <button className="btn small" onClick={(e) => { e.preventDefault(); geocode() }}>Định vị</button>
-            {geoLoading && <div className="loading" style={{ padding:0 }}>Đang định vị...</div>}
-            {geoError && <div className="error">{geoError}</div>}
-          </div>
-          <div style={{ marginTop: 8 }}>
-            <div id="shipmap" style={{ width:'100%', height: 260, borderRadius: 12 }} />
-          </div>
-          {geoCands.length >= 1 && (
+          <h2>Thanh toán</h2>
+          <div className="card">
+            <div>Tạm tính: ${subtotal.toFixed(2)}</div>
+            <div className="form-row" style={{ marginTop: 12 }}>
+              <label>Họ tên người nhận</label>
+              <input className="input" placeholder="Nguyễn Văn A" name="name" autoComplete="shipping name" defaultValue={shipName} ref={shipNameRef} onBlur={e => setShipName(e.target.value)} />
+            </div>
             <div className="form-row">
-              <label>Gợi ý</label>
-              <ul style={{ listStyle:'none', padding:0, margin:0 }}>
-                {geoCands.slice(0,5).map((c, i) => (
-                  <li key={i}>
-                    <a href="#" onClick={(e) => { e.preventDefault(); setShipLat(c.lat); setShipLng(c.lon); try { if (markerRef.current && mapRef.current && mapRef.current.flyTo) { markerRef.current.setLngLat([c.lon, c.lat]); mapRef.current.flyTo({ center: [c.lon, c.lat], zoom: 16 }) } } catch {} }}>{c.display_name || `${c.lat},${c.lon}`}</a>
-                  </li>
-                ))}
-              </ul>
+              <label>Số điện thoại</label>
+              <input className="input" placeholder="09xx xxx xxx" type="tel" inputMode="tel" name="tel" autoComplete="shipping tel" defaultValue={shipPhone} ref={shipPhoneRef} onBlur={e => setShipPhone(e.target.value)} />
             </div>
-          )}
-          <div className="form-row">
-            <label>Phương thức thanh toán</label>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input type="radio" name="payment" checked={paymentMethod==='COD'} onChange={() => setPaymentMethod('COD')} /> COD (Thanh toán khi nhận hàng)
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input type="radio" name="payment" checked={paymentMethod==='VNPay'} onChange={() => setPaymentMethod('VNPay')} /> VNPay
-              </label>
+            <div className="form-row">
+              <label>Địa chỉ giao hàng</label>
+              <div className="autocomplete-container">
+                <input
+                  className="input"
+                  placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành"
+                  name="street-address"
+                  autoComplete="off"
+                  defaultValue={shipAddress}
+                  ref={shipAddressRef}
+                  onChange={e => handleAddressInput(e.target.value)}
+                  onFocus={() => { if (autoSuggestions.length > 0) setShowAutoDropdown(true) }}
+                  onBlur={e => { setTimeout(() => setShowAutoDropdown(false), 200); setShipAddress(e.target.value) }}
+                />
+                {showAutoDropdown && (
+                  <div className="autocomplete-dropdown">
+                    {autoLoading && <div className="autocomplete-loading">Đang tìm kiếm...</div>}
+                    {!autoLoading && autoSuggestions.map((s, i) => (
+                      <div key={i} className="autocomplete-item" onMouseDown={e => { e.preventDefault(); selectSuggestion(s) }}>
+                        <span className="icon">📍</span>
+                        <div className="text">
+                          <div className="main-text">{s.structured_formatting?.main_text || s.description.split(',')[0]}</div>
+                          <div className="sub-text">{s.structured_formatting?.secondary_text || s.description}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="form-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button className="btn small" onClick={(e) => { e.preventDefault(); geocode() }}>Định vị</button>
+              {geoLoading && <div className="loading" style={{ padding: 0 }}>Đang định vị...</div>}
+              {geoError && <div className="error">{geoError}</div>}
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <div id="shipmap" style={{ width: '100%', height: 260, borderRadius: 12 }} />
+            </div>
+            <div className="form-row">
+              <label>Phương thức thanh toán</label>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input type="radio" name="payment" checked={paymentMethod === 'COD'} onChange={() => setPaymentMethod('COD')} /> COD (Thanh toán khi nhận hàng)
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input type="radio" name="payment" checked={paymentMethod === 'VNPay'} onChange={() => setPaymentMethod('VNPay')} /> VNPay
+                </label>
+              </div>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <button className="btn primary" onClick={place} disabled={cart.length === 0}>Đặt hàng</button>
             </div>
           </div>
-          <div style={{ marginTop: 12 }}>
-            <button className="btn primary" onClick={place} disabled={cart.length === 0}>Đặt hàng</button>
-          </div>
-        </div>
         </div>
       </div>
     )
